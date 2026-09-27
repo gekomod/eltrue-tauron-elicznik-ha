@@ -86,7 +86,7 @@ SENSOR_DESCRIPTIONS: tuple[TauronSensorEntityDescription, ...] = (
     ),
     TauronSensorEntityDescription(
         key="energia_pobrana_okres",
-        translation_key="energia_pobrana_okres",
+        name="Current period consumption",
         device_class=SensorDeviceClass.ENERGY,
         native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
         state_class=SensorStateClass.MEASUREMENT,
@@ -94,7 +94,7 @@ SENSOR_DESCRIPTIONS: tuple[TauronSensorEntityDescription, ...] = (
     ),
     TauronSensorEntityDescription(
         key="energia_oddana_okres",
-        translation_key="energia_oddana_okres",
+        name="Current period export",
         device_class=SensorDeviceClass.ENERGY,
         native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
         state_class=SensorStateClass.MEASUREMENT,
