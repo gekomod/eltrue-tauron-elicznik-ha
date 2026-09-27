@@ -12,7 +12,7 @@ from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 from homeassistant.util import dt as dt_util
 
-from .api import TauronApiClient, TauronApiError, TauronEnergyData
+from .api import TauronApiClient, TauronApiError, TauronEnergyData, TauronPeriodEnergyData
 from .const import (
     CONF_BILLING_PERIOD_START,
     CONF_PREV_ENERGIA_ODDANA,
@@ -48,6 +48,12 @@ class TauronCalculatedData:
     days_left: int
     kwh_left_per_day: float
     kwh_left_per_month: float
+
+    # Values from the official eLicznik chart endpoint.
+    energia_pobrana_dzien: float | None
+    energia_oddana_dzien: float | None
+    srednia_pobrana_dzien: float | None
+    srednia_oddana_dzien: float | None
 
 
 class TauronElicznikCoordinator(DataUpdateCoordinator[TauronCalculatedData]):
@@ -89,18 +95,34 @@ class TauronElicznikCoordinator(DataUpdateCoordinator[TauronCalculatedData]):
     async def _async_update_data(self) -> TauronCalculatedData:
         """Fetch data from Tauron API and calculate net-metering values."""
         fetch_time = dt_util.now()
+        period_data: TauronPeriodEnergyData | None = None
+
         try:
             await self._client.authenticate()
             energy_data = await self._client.fetch_energy_data()
+
+            # Keep the existing lifetime-counter path authoritative. The new
+            # chart endpoint is intentionally isolated so a /blokada or a
+            # changed chart response cannot take down the existing sensors.
+            try:
+                period_data = await self._client.fetch_period_energy_data()
+            except TauronApiError as err:
+                _LOGGER.warning(
+                    "Tauron chart API unavailable; keeping period sensors unavailable: %s",
+                    err,
+                )
         except TauronApiError as err:
             raise UpdateFailed(f"Error fetching Tauron data: {err}") from err
         finally:
             await self._client.logout()
 
-        return self._calculate_data(energy_data, fetch_time)
+        return self._calculate_data(energy_data, fetch_time, period_data)
 
     def _calculate_data(
-        self, energy_data: TauronEnergyData, fetch_time: datetime
+        self,
+        energy_data: TauronEnergyData,
+        fetch_time: datetime,
+        period_data: TauronPeriodEnergyData | None = None,
     ) -> TauronCalculatedData:
         """Calculate net-metering values from raw energy data."""
         en_pob_increment = energy_data.energia_pobrana - self._prev_energia_pobrana
@@ -128,4 +150,16 @@ class TauronElicznikCoordinator(DataUpdateCoordinator[TauronCalculatedData]):
             days_left=days_left,
             kwh_left_per_day=round(kwh_left_per_day, 2),
             kwh_left_per_month=round(kwh_left_per_month, 2),
+            energia_pobrana_dzien=(
+                period_data.energia_pobrana if period_data else None
+            ),
+            energia_oddana_dzien=(
+                period_data.energia_oddana if period_data else None
+            ),
+            srednia_pobrana_dzien=(
+                period_data.srednia_pobrana if period_data else None
+            ),
+            srednia_oddana_dzien=(
+                period_data.srednia_oddana if period_data else None
+            ),
         )
