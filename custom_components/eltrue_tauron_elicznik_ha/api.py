@@ -10,7 +10,7 @@ from typing import Any
 
 from aiohttp import ClientSession
 
-from .const import URL_API, URL_LOGIN, URL_LOGOUT, URL_SERVICE
+from .const import URL_API, URL_ENERGIA_API, URL_LOGIN, URL_LOGOUT, URL_SERVICE
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -31,6 +31,8 @@ class TauronEnergyData:
     energia_oddana: float
     reading_date: datetime
     success: bool
+    energia_pobrana_okres: float
+    energia_oddana_okres: float
 
 
 class TauronApiClient:
@@ -138,12 +140,98 @@ class TauronApiClient:
         # Use the reading date from the response (most recent available data)
         reading_date = energia_pobrana.get("date", query_date)
 
+        # The official eLicznik page uses /energia/api for the chart and
+        # period sum. /odczyty/api is a meter-counter endpoint and must not
+        # be used as the current-period consumption shown by the web UI.
+        period_from = query_date.strftime("%d.%m.%Y")
+        period_to = period_from
+        energia_pobrana_okres = await self._fetch_period_energy(
+            period_from, period_to, "consum"
+        )
+        energia_oddana_okres = await self._fetch_period_energy(
+            period_from, period_to, "oze"
+        )
+
         return TauronEnergyData(
             energia_pobrana=energia_pobrana["counter"],
             energia_oddana=energia_oddana["counter"],
             reading_date=reading_date,
             success=energia_pobrana["success"] and energia_oddana["success"],
+            energia_pobrana_okres=energia_pobrana_okres,
+            energia_oddana_okres=energia_oddana_okres,
         )
+
+    async def _fetch_period_energy(
+        self, from_str: str, to_str: str, energy_type: str
+    ) -> float:
+        """Fetch the eLicznik chart sum for a selected period.
+
+        The official web application sends from, to, type and profile=full time
+        to /energia/api and sums the returned EC values.
+        """
+        payload = {
+            "from": from_str,
+            "to": to_str,
+            "type": energy_type,
+            "profile": "full time",
+        }
+        headers = {"Content-Type": "application/x-www-form-urlencoded"}
+
+        data = await self._make_energy_api_request(payload, energy_type)
+        if not data.get("success"):
+            _LOGGER.warning("Energy API returned no data for %s", energy_type)
+            return 0.0
+
+        try:
+            body = data.get("data", {})
+            records = body.get("allData", []) if isinstance(body, dict) else body
+            if not isinstance(records, list):
+                return 0.0
+
+            total = 0.0
+            for record in records:
+                if not isinstance(record, dict):
+                    continue
+                value = record.get("EC")
+                if value is None:
+                    continue
+                total += float(value)
+
+            _LOGGER.debug(
+                "TAURON /energia/api %s %s-%s: %.3f kWh from %d records",
+                energy_type,
+                from_str,
+                to_str,
+                total,
+                len(records),
+            )
+            return round(total, 3)
+        except (TypeError, ValueError, AttributeError) as err:
+            raise TauronApiError(
+                f"Invalid /energia/api response for {energy_type}: {err}"
+            ) from err
+
+    async def _make_energy_api_request(
+        self, payload: dict[str, str], energy_type: str
+    ) -> dict[str, Any]:
+        """POST to the official eLicznik energy/chart endpoint."""
+        try:
+            async with self._session.post(
+                URL_ENERGIA_API,
+                data=payload,
+                headers={"Content-Type": "application/x-www-form-urlencoded"},
+            ) as response:
+                if response.status != 200:
+                    raise TauronApiError(
+                        f"Energy API request failed with status {response.status}"
+                    )
+                return await response.json()
+        except TauronApiError:
+            raise
+        except Exception as err:
+            raise TauronApiError(
+                f"Failed to fetch period energy {energy_type}: {err}"
+            ) from err
 
     async def _fetch_energy_type(
         self, from_str: str, to_str: str, energy_type: str
