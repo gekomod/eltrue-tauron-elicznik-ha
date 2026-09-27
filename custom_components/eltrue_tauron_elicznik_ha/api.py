@@ -140,25 +140,12 @@ class TauronApiClient:
         # Use the reading date from the response (most recent available data)
         reading_date = energia_pobrana.get("date", query_date)
 
-        # The official eLicznik page uses /energia/api for the chart and
-        # period sum. /odczyty/api is a meter-counter endpoint and must not
-        # be used as the current-period consumption shown by the web UI.
-        period_from = query_date.strftime("%d.%m.%Y")
-        period_to = period_from
-        energia_pobrana_okres = await self._fetch_period_energy(
-            period_from, period_to, "consum"
-        )
-        energia_oddana_okres = await self._fetch_period_energy(
-            period_from, period_to, "oze"
-        )
 
         return TauronEnergyData(
             energia_pobrana=energia_pobrana["counter"],
             energia_oddana=energia_oddana["counter"],
             reading_date=reading_date,
             success=energia_pobrana["success"] and energia_oddana["success"],
-            energia_pobrana_okres=energia_pobrana_okres,
-            energia_oddana_okres=energia_oddana_okres,
         )
 
     async def _fetch_period_energy(
