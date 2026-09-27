@@ -33,36 +33,20 @@
       }
     },
     "sensor": {
-      "days_left": {
-        "name": "Days until billing"
-      },
-      "energia_oddana": {
-        "name": "Exported energy"
-      },
-      "energia_pobrana": {
-        "name": "Consumed energy"
-      },
-      "kwh_left": {
-        "name": "Energy balance"
-      },
-      "kwh_left_per_day": {
-        "name": "Daily energy budget"
-      },
-      "kwh_left_per_month": {
-        "name": "Monthly energy budget"
-      },
-      "last_reading_date": {
-        "name": "Last reading date"
-      },
-      "energia_pobrana_start": {
-        "name": "Consumed energy at billing start"
-      },
-      "energia_oddana_start": {
-        "name": "Exported energy at billing start"
-      },
-      "last_fetch_time": {
-        "name": "Last data fetch"
-      }
+      "days_left": {"name": "Days until billing"},
+      "energia_oddana": {"name": "Exported energy"},
+      "energia_pobrana": {"name": "Consumed energy"},
+      "kwh_left": {"name": "Energy balance"},
+      "kwh_left_per_day": {"name": "Daily energy budget"},
+      "kwh_left_per_month": {"name": "Monthly energy budget"},
+      "last_reading_date": {"name": "Last reading date"},
+      "energia_pobrana_start": {"name": "Consumed energy at billing start"},
+      "energia_oddana_start": {"name": "Exported energy at billing start"},
+      "last_fetch_time": {"name": "Last data fetch"},
+      "energia_pobrana_dzien": {"name": "Daily consumed energy (chart API)"},
+      "energia_oddana_dzien": {"name": "Daily exported energy (chart API)"},
+      "srednia_pobrana_dzien": {"name": "Daily consumption average"},
+      "srednia_oddana_dzien": {"name": "Daily export average"}
     }
   },
   "exceptions": {

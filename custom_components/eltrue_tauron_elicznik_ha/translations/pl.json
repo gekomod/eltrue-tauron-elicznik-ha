@@ -1,8 +1,6 @@
 {
   "config": {
-    "abort": {
-      "already_configured": "To konto jest już skonfigurowane"
-    },
+    "abort": {"already_configured": "To konto jest już skonfigurowane"},
     "error": {
       "cannot_connect": "Nie można połączyć się z serwerem",
       "invalid_auth": "Nieprawidłowe dane logowania",
@@ -27,42 +25,22 @@
     }
   },
   "entity": {
-    "button": {
-      "refresh": {
-        "name": "Odśwież dane"
-      }
-    },
+    "button": {"refresh": {"name": "Odśwież dane"}},
     "sensor": {
-      "days_left": {
-        "name": "Dni do rozliczenia"
-      },
-      "energia_oddana": {
-        "name": "Energia oddana"
-      },
-      "energia_pobrana": {
-        "name": "Energia pobrana"
-      },
-      "kwh_left": {
-        "name": "Bilans energii"
-      },
-      "kwh_left_per_day": {
-        "name": "Dzienny budżet energii"
-      },
-      "kwh_left_per_month": {
-        "name": "Miesięczny budżet energii"
-      },
-      "last_reading_date": {
-        "name": "Data ostatniego odczytu"
-      },
-      "energia_pobrana_start": {
-        "name": "Energia pobrana na początku okresu"
-      },
-      "energia_oddana_start": {
-        "name": "Energia oddana na początku okresu"
-      },
-      "last_fetch_time": {
-        "name": "Ostatnie pobranie danych"
-      }
+      "days_left": {"name": "Dni do rozliczenia"},
+      "energia_oddana": {"name": "Energia oddana"},
+      "energia_pobrana": {"name": "Energia pobrana"},
+      "kwh_left": {"name": "Bilans energii"},
+      "kwh_left_per_day": {"name": "Dzienny budżet energii"},
+      "kwh_left_per_month": {"name": "Miesięczny budżet energii"},
+      "last_reading_date": {"name": "Data ostatniego odczytu"},
+      "energia_pobrana_start": {"name": "Energia pobrana na początku okresu"},
+      "energia_oddana_start": {"name": "Energia oddana na początku okresu"},
+      "last_fetch_time": {"name": "Ostatnie pobranie danych"},
+      "energia_pobrana_dzien": {"name": "Dzienne zużycie energii (chart API)"},
+      "energia_oddana_dzien": {"name": "Dzienne oddanie energii (chart API)"},
+      "srednia_pobrana_dzien": {"name": "Średnie zużycie dzienne"},
+      "srednia_oddana_dzien": {"name": "Średnie oddanie dzienne"}
     }
   }
 }

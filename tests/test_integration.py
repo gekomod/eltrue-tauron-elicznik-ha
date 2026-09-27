@@ -197,7 +197,7 @@ def test_url_api():
 # ── sensor descriptions ───────────────────────────────────────────────────────
 
 def test_sensor_descriptions_count():
-    assert len(_sensor.SENSOR_DESCRIPTIONS) == 10
+    assert len(_sensor.SENSOR_DESCRIPTIONS) == 14
 
 
 def test_sensor_keys_present():
@@ -213,6 +213,10 @@ def test_sensor_keys_present():
         "energia_pobrana_start",
         "energia_oddana_start",
         "last_fetch_time",
+        "energia_pobrana_dzien",
+        "energia_oddana_dzien",
+        "srednia_pobrana_dzien",
+        "srednia_oddana_dzien",
     }
 
 
@@ -236,6 +240,39 @@ def test_timestamp_sensors_have_device_class():
             assert desc.device_class == "timestamp", (
                 f"{desc.key} should have TIMESTAMP device class"
             )
+
+
+def test_parse_chart_energy_values_and_average():
+    """Chart API totals are the sum of the returned values[] array."""
+    data = {
+        "success": True,
+        "data": {"values": [1.2, 2.3, 7.1], "average": 0.4},
+    }
+    total, average = _api.TauronApiClient._parse_chart_energy(data)
+    assert total == 10.6
+    assert average == 0.4
+
+
+def test_parse_chart_energy_ignores_missing_values():
+    """Null chart points do not contribute to the daily total."""
+    data = {
+        "success": True,
+        "data": {"values": [None, 1.5, None, 2.0], "average": None},
+    }
+    total, average = _api.TauronApiClient._parse_chart_energy(data)
+    assert total == 3.5
+    assert average is None
+
+
+def test_parse_chart_energy_rejects_empty_values():
+    """An empty values array is treated as unavailable chart data."""
+    try:
+        _api.TauronApiClient._parse_chart_energy(
+            {"success": True, "data": {"values": []}}
+        )
+    except _api.TauronApiError:
+        return
+    raise AssertionError("Expected TauronApiError")
 
 
 # ── TauronCalculatedData computation ──────────────────────────────────────────
