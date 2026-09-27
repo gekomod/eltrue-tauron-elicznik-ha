@@ -35,6 +35,8 @@ class TauronCalculatedData:
     # Raw meter readings
     energia_pobrana: float
     energia_oddana: float
+    energia_pobrana_okres: float
+    energia_oddana_okres: float
     reading_date: datetime
 
     # Billing period start readings (reference values fetched at setup)
@@ -129,6 +131,8 @@ class TauronElicznikCoordinator(DataUpdateCoordinator[TauronCalculatedData]):
         return TauronCalculatedData(
             energia_pobrana=energy_data.energia_pobrana,
             energia_oddana=energy_data.energia_oddana,
+            energia_pobrana_okres=energy_data.energia_pobrana_okres,
+            energia_oddana_okres=energy_data.energia_oddana_okres,
             reading_date=dt_util.as_local(energy_data.reading_date),
             energia_pobrana_start=self._prev_energia_pobrana,
             energia_oddana_start=self._prev_energia_oddana,
