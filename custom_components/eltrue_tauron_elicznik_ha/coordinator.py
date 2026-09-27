@@ -32,25 +32,18 @@ _LOGGER = logging.getLogger(__name__)
 class TauronCalculatedData:
     """Calculated data from Tauron readings."""
 
-    # Raw meter readings
     energia_pobrana: float
     energia_oddana: float
-    energia_pobrana_okres: float
-    energia_oddana_okres: float
     reading_date: datetime
 
-    # Billing period start readings (reference values fetched at setup)
     energia_pobrana_start: float
     energia_oddana_start: float
 
-    # Timestamp of last successful data fetch from eLicznik
     last_fetch_time: datetime
 
-    # Increments since billing period start
     energia_pobrana_increment: float
     energia_oddana_increment: float
 
-    # Net-metering calculations
     kwh_left: float
     days_left: int
     kwh_left_per_day: float
@@ -62,11 +55,7 @@ class TauronElicznikCoordinator(DataUpdateCoordinator[TauronCalculatedData]):
 
     config_entry: ConfigEntry
 
-    def __init__(
-        self,
-        hass: HomeAssistant,
-        config_entry: ConfigEntry,
-    ) -> None:
+    def __init__(self, hass: HomeAssistant, config_entry: ConfigEntry) -> None:
         """Initialize the coordinator."""
         super().__init__(
             hass,
@@ -83,7 +72,6 @@ class TauronElicznikCoordinator(DataUpdateCoordinator[TauronCalculatedData]):
             password=config_entry.data["password"],
         )
 
-        # Billing period configuration: calculate end from start (1 year - 1 day)
         billing_start = datetime.strptime(
             config_entry.data[CONF_BILLING_PERIOD_START], "%Y-%m-%d"
         ).date()
@@ -91,8 +79,12 @@ class TauronElicznikCoordinator(DataUpdateCoordinator[TauronCalculatedData]):
             date(billing_start.year + 1, billing_start.month, billing_start.day)
             - timedelta(days=1)
         )
-        self._prev_energia_pobrana = float(config_entry.data[CONF_PREV_ENERGIA_POBRANA])
-        self._prev_energia_oddana = float(config_entry.data[CONF_PREV_ENERGIA_ODDANA])
+        self._prev_energia_pobrana = float(
+            config_entry.data[CONF_PREV_ENERGIA_POBRANA]
+        )
+        self._prev_energia_oddana = float(
+            config_entry.data[CONF_PREV_ENERGIA_ODDANA]
+        )
 
     async def _async_update_data(self) -> TauronCalculatedData:
         """Fetch data from Tauron API and calculate net-metering values."""
@@ -107,32 +99,25 @@ class TauronElicznikCoordinator(DataUpdateCoordinator[TauronCalculatedData]):
 
         return self._calculate_data(energy_data, fetch_time)
 
-    def _calculate_data(self, energy_data: TauronEnergyData, fetch_time: datetime) -> TauronCalculatedData:
+    def _calculate_data(
+        self, energy_data: TauronEnergyData, fetch_time: datetime
+    ) -> TauronCalculatedData:
         """Calculate net-metering values from raw energy data."""
-        # Calculate increments since billing period start
         en_pob_increment = energy_data.energia_pobrana - self._prev_energia_pobrana
         en_odd_increment = energy_data.energia_oddana - self._prev_energia_oddana
-
-        # Apply 80% net-metering ratio
         en_odd_increment_80 = NET_METERING_RATIO * en_odd_increment
-
-        # Calculate remaining energy balance
         kwh_left = en_odd_increment_80 - en_pob_increment
 
-        # Calculate days left until billing period end
         today = date.today()
         days_left = (self._billing_period_end - today).days
-        days_left = max(days_left, 1)  # Avoid division by zero
+        days_left = max(days_left, 1)
 
-        # Calculate daily and monthly budgets
         kwh_left_per_day = kwh_left / days_left
         kwh_left_per_month = 30 * kwh_left_per_day
 
         return TauronCalculatedData(
             energia_pobrana=energy_data.energia_pobrana,
             energia_oddana=energy_data.energia_oddana,
-            energia_pobrana_okres=energy_data.energia_pobrana_okres,
-            energia_oddana_okres=energy_data.energia_oddana_okres,
             reading_date=dt_util.as_local(energy_data.reading_date),
             energia_pobrana_start=self._prev_energia_pobrana,
             energia_oddana_start=self._prev_energia_oddana,
