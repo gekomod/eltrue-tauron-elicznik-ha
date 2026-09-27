@@ -106,6 +106,38 @@ SENSOR_DESCRIPTIONS: tuple[TauronSensorEntityDescription, ...] = (
         device_class=SensorDeviceClass.TIMESTAMP,
         value_fn=lambda data: data.last_fetch_time,
     ),
+    TauronSensorEntityDescription(
+        key="energia_pobrana_dzien",
+        translation_key="energia_pobrana_dzien",
+        device_class=SensorDeviceClass.ENERGY,
+        native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
+        state_class=SensorStateClass.MEASUREMENT,
+        value_fn=lambda data: data.energia_pobrana_dzien,
+    ),
+    TauronSensorEntityDescription(
+        key="energia_oddana_dzien",
+        translation_key="energia_oddana_dzien",
+        device_class=SensorDeviceClass.ENERGY,
+        native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
+        state_class=SensorStateClass.MEASUREMENT,
+        value_fn=lambda data: data.energia_oddana_dzien,
+    ),
+    TauronSensorEntityDescription(
+        key="srednia_pobrana_dzien",
+        translation_key="srednia_pobrana_dzien",
+        device_class=SensorDeviceClass.ENERGY,
+        native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
+        state_class=SensorStateClass.MEASUREMENT,
+        value_fn=lambda data: data.srednia_pobrana_dzien,
+    ),
+    TauronSensorEntityDescription(
+        key="srednia_oddana_dzien",
+        translation_key="srednia_oddana_dzien",
+        device_class=SensorDeviceClass.ENERGY,
+        native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
+        state_class=SensorStateClass.MEASUREMENT,
+        value_fn=lambda data: data.srednia_oddana_dzien,
+    ),
 )
 
 
