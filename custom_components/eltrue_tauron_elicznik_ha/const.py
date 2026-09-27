@@ -8,6 +8,7 @@ DOMAIN: Final = "eltrue_tauron_elicznik_ha"
 URL_LOGIN: Final = "https://logowanie.tauron-dystrybucja.pl/login"
 URL_SERVICE: Final = "https://elicznik.tauron-dystrybucja.pl"
 URL_API: Final = "https://elicznik.tauron-dystrybucja.pl/odczyty/api"
+URL_ENERGIA_API: Final = "https://elicznik.tauron-dystrybucja.pl/energia/api"
 URL_LOGOUT: Final = "https://elicznik.tauron-dystrybucja.pl/applogout"
 
 # Config keys
