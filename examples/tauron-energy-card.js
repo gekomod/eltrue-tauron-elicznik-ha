@@ -248,18 +248,18 @@ class TauronEnergyCard extends HTMLElement {
       const height = Math.max(1, (value / max) * plotH);
       const y = top + plotH - height;
       const label = String(i).padStart(2, "0");
-      return \`<rect class="hour-bar" x="\${x.toFixed(1)}" y="\${y.toFixed(1)}" width="\${width.toFixed(1)}" height="\${height.toFixed(1)}" rx="3"><title>\${label}:00 — \${this._fmt(value,2)} kWh</title></rect><text class="hour-axis" x="\${(x+width/2).toFixed(1)}" y="\${H-8}" text-anchor="middle">\${label}</text>\`;
+      return `<rect class="hour-bar" x="${x.toFixed(1)}" y="${y.toFixed(1)}" width="${width.toFixed(1)}" height="${height.toFixed(1)}" rx="3"><title>${label}:00 — ${this._fmt(value,2)} kWh</title></rect><text class="hour-axis" x="${(x+width/2).toFixed(1)}" y="${H-8}" text-anchor="middle">${label}</text>`;
     }).join("");
 
-    return \`
+    return `
       <div class="hourly">
         <div class="section-title"><strong>Godzinowy profil dzisiejszego zużycia</strong><span>24 godziny</span></div>
-        <svg viewBox="0 0 \${W} \${H}" preserveAspectRatio="none" role="img" aria-label="Godzinowy profil dzisiejszego zużycia">
-          <line class="hour-grid" x1="\${left}" y1="\${top+plotH}" x2="\${W-right}" y2="\${top+plotH}"></line>
-          \${bars}
+        <svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" role="img" aria-label="Godzinowy profil dzisiejszego zużycia">
+          <line class="hour-grid" x1="${left}" y1="${top+plotH}" x2="${W-right}" y2="${top+plotH}"></line>
+          ${bars}
         </svg>
       </div>
-    \`;
+    `;
   }
 
   _chartSvg() {
@@ -358,98 +358,98 @@ class TauronEnergyCard extends HTMLElement {
       : 0;
     const daysPercent = Number.isFinite(days) ? Math.max(0, Math.min(100, (days / 365) * 100)) : 0;
 
-    this.shadowRoot.innerHTML = \`
+    this.shadowRoot.innerHTML = `
       <section class="panel" aria-label="Tauron eLicznik">
         <header class="top">
           <div class="brand">
             <div class="energy-icon">⚡</div>
             <div>
-              <h1>\${this._escape(c.title)}</h1>
+              <h1>${this._escape(c.title)}</h1>
               <div class="subtitle">Tauron eLicznik · zużycie, oddanie i okres rozliczeniowy</div>
             </div>
           </div>
           <div class="top-actions">
-            <div class="connection"><span class="connection-dot"></span><span>Połączony · \${updated ? this._relative(updated) : "brak danych"}</span></div>
-            <button class="refresh" title="Odśwież dane Tauron" aria-label="Odśwież dane Tauron" \${this._loading ? "disabled" : ""}><span class="\${this._loading ? "spin" : ""}">↻</span></button>
+            <div class="connection"><span class="connection-dot"></span><span>Połączony · ${updated ? this._relative(updated) : "brak danych"}</span></div>
+            <button class="refresh" title="Odśwież dane Tauron" aria-label="Odśwież dane Tauron" ${this._loading ? "disabled" : ""}><span class="${this._loading ? "spin" : ""}">↻</span></button>
           </div>
         </header>
 
         <div class="hero-grid">
           <div class="hero">
-            <div class="budget-ring" style="--budget:\${budgetPercent}%"><div>\${this._fmt(budgetPercent,0)}%<span>dziennego budżetu</span></div></div>
+            <div class="budget-ring" style="--budget:${budgetPercent}%"><div>${this._fmt(budgetPercent,0)}%<span>dziennego budżetu</span></div></div>
             <div class="eyebrow">Pobór dzisiaj <span class="eyebrow-dot"></span></div>
-            <div class="big-value">\${Number.isFinite(dailyConsumed) ? this._fmt(dailyConsumed,2) : "—"} <small>kWh</small></div>
+            <div class="big-value">${Number.isFinite(dailyConsumed) ? this._fmt(dailyConsumed,2) : "—"} <small>kWh</small></div>
             <div class="hero-meta">
-              <span><b style="color:#89a9ff">SUMA DZISIAJ</b><strong>\${Number.isFinite(dailyConsumed) ? this._fmt(dailyConsumed,2) : "—"} kWh</strong></span>
-              <span><b style="color:#89a9ff">ŚREDNIA</b><strong>\${Number.isFinite(dailyAverage) ? this._fmt(dailyAverage,2) : "—"} kWh/h</strong></span>
+              <span><b style="color:#89a9ff">SUMA DZISIAJ</b><strong>${Number.isFinite(dailyConsumed) ? this._fmt(dailyConsumed,2) : "—"} kWh</strong></span>
+              <span><b style="color:#89a9ff">ŚREDNIA</b><strong>${Number.isFinite(dailyAverage) ? this._fmt(dailyAverage,2) : "—"} kWh/h</strong></span>
             </div>
           </div>
 
           <div class="card">
             <div class="card-title">Ostatni odczyt z Taurona</div>
-            <div class="card-date">\${this._date(lastReading)}</div>
-            <div class="metric-row"><span>Pobór</span><strong>\${Number.isFinite(dailyConsumed) ? this._fmt(dailyConsumed,2) : "—"} kWh</strong></div>
-            <div class="metric-row"><span>Oddanie</span><strong>\${Number.isFinite(dailyExported) ? this._fmt(dailyExported,2) : "—"} kWh</strong></div>
+            <div class="card-date">${this._date(lastReading)}</div>
+            <div class="metric-row"><span>Pobór</span><strong>${Number.isFinite(dailyConsumed) ? this._fmt(dailyConsumed,2) : "—"} kWh</strong></div>
+            <div class="metric-row"><span>Oddanie</span><strong>${Number.isFinite(dailyExported) ? this._fmt(dailyExported,2) : "—"} kWh</strong></div>
           </div>
 
           <div class="card">
             <div class="card-title">Okres rozliczeniowy</div>
-            <div class="billing-days"><strong>\${Number.isFinite(days) ? this._fmt(days,0) : "—"}</strong><span>dni do końca</span></div>
-            <div class="progress"><div style="width:\${daysPercent}%"></div></div>
-            <div class="balance-small \${balanceClass}">\${this._fmt(balance,1)} kWh</div>
+            <div class="billing-days"><strong>${Number.isFinite(days) ? this._fmt(days,0) : "—"}</strong><span>dni do końca</span></div>
+            <div class="progress"><div style="width:${daysPercent}%"></div></div>
+            <div class="balance-small ${balanceClass}">${this._fmt(balance,1)} kWh</div>
             <div style="color:var(--te-muted);font-size:11px">Bilans okresu</div>
           </div>
         </div>
 
         <div class="stat-grid">
-          <div class="stat"><div class="stat-icon">⚡</div><div class="stat-label">Dzienny budżet</div><div class="stat-value">\${Number.isFinite(dailyBudget) ? this._fmt(dailyBudget,2) : "—"} kWh</div></div>
-          <div class="stat"><div class="stat-icon">▣</div><div class="stat-label">Miesięczny budżet</div><div class="stat-value">\${Number.isFinite(monthlyBudget) ? this._fmt(monthlyBudget,2) : "—"} kWh</div></div>
-          <div class="stat"><div class="stat-icon">⌁</div><div class="stat-label">Średnie zużycie dzienne</div><div class="stat-value">\${Number.isFinite(dailyAverage) ? this._fmt(dailyAverage,2) : "—"} kWh</div></div>
-          <div class="stat"><div class="stat-icon">↗</div><div class="stat-label">Łącznie pobrano</div><div class="stat-value">\${this._fmt(consumed,1)} kWh</div></div>
-          <div class="stat"><div class="stat-icon">↙</div><div class="stat-label">Łącznie oddano</div><div class="stat-value">\${this._fmt(exported,1)} kWh</div></div>
+          <div class="stat"><div class="stat-icon">⚡</div><div class="stat-label">Dzienny budżet</div><div class="stat-value">${Number.isFinite(dailyBudget) ? this._fmt(dailyBudget,2) : "—"} kWh</div></div>
+          <div class="stat"><div class="stat-icon">▣</div><div class="stat-label">Miesięczny budżet</div><div class="stat-value">${Number.isFinite(monthlyBudget) ? this._fmt(monthlyBudget,2) : "—"} kWh</div></div>
+          <div class="stat"><div class="stat-icon">⌁</div><div class="stat-label">Średnie zużycie dzienne</div><div class="stat-value">${Number.isFinite(dailyAverage) ? this._fmt(dailyAverage,2) : "—"} kWh</div></div>
+          <div class="stat"><div class="stat-icon">↗</div><div class="stat-label">Łącznie pobrano</div><div class="stat-value">${this._fmt(consumed,1)} kWh</div></div>
+          <div class="stat"><div class="stat-icon">↙</div><div class="stat-label">Łącznie oddano</div><div class="stat-value">${this._fmt(exported,1)} kWh</div></div>
         </div>
 
         <div class="section">
-          <div class="section-title"><div><strong>Zużycie energii</strong><span style="margin-left:8px">ostatnie \${Number(c.days_history || 14)} dni</span></div><span>▦ \${Number(c.days_history || 14)} dni</span></div>
-          <div class="chart">\${this._chartSvg()}</div>
+          <div class="section-title"><div><strong>Zużycie energii</strong><span style="margin-left:8px">ostatnie ${Number(c.days_history || 14)} dni</span></div><span>▦ ${Number(c.days_history || 14)} dni</span></div>
+          <div class="chart">${this._chartSvg()}</div>
           <div class="legend"><span><i class="c"></i>Pobór (kWh)</span><span><i class="e"></i>Oddanie (kWh)</span></div>
         </div>
 
-        \${this._hourlyProfileSvg()}
+        ${this._hourlyProfileSvg()}
 
         <div class="details-grid">
           <div class="section">
             <div class="section-title"><strong>Szczegóły licznika</strong><span>stan</span></div>
-            <div class="detail-row"><span>Stan licznika — pobrana</span><strong>\${this._fmt(consumed,1)} kWh</strong></div>
-            <div class="detail-row"><span>Stan licznika — oddana</span><strong>\${this._fmt(exported,1)} kWh</strong></div>
-            <div class="detail-row"><span>Stan na początku okresu (pobór)</span><strong>\${Number.isFinite(billingStartConsumed) ? this._fmt(billingStartConsumed,1) : "—"} kWh</strong></div>
-            <div class="detail-row"><span>Stan na początku okresu (oddanie)</span><strong>\${Number.isFinite(billingStartExported) ? this._fmt(billingStartExported,1) : "—"} kWh</strong></div>
+            <div class="detail-row"><span>Stan licznika — pobrana</span><strong>${this._fmt(consumed,1)} kWh</strong></div>
+            <div class="detail-row"><span>Stan licznika — oddana</span><strong>${this._fmt(exported,1)} kWh</strong></div>
+            <div class="detail-row"><span>Stan na początku okresu (pobór)</span><strong>${Number.isFinite(billingStartConsumed) ? this._fmt(billingStartConsumed,1) : "—"} kWh</strong></div>
+            <div class="detail-row"><span>Stan na początku okresu (oddanie)</span><strong>${Number.isFinite(billingStartExported) ? this._fmt(billingStartExported,1) : "—"} kWh</strong></div>
           </div>
 
           <div class="section">
             <div class="section-title"><strong>Informacje</strong><span>eLicznik</span></div>
             <div class="info-grid">
-              <div class="info"><div class="info-label">Data ostatniego odczytu</div><div class="info-value">\${this._date(lastReading)}</div></div>
-              <div class="info"><div class="info-label">Ostatnie pobranie danych</div><div class="info-value">\${this._date(lastFetch)}</div></div>
+              <div class="info"><div class="info-label">Data ostatniego odczytu</div><div class="info-value">${this._date(lastReading)}</div></div>
+              <div class="info"><div class="info-label">Ostatnie pobranie danych</div><div class="info-value">${this._date(lastFetch)}</div></div>
             </div>
-            <button class="wide-refresh" title="Odśwież dane Tauron" aria-label="Odśwież dane Tauron" \${this._loading ? "disabled" : ""}>↻ &nbsp; Odśwież dane z eLicznik</button>
+            <button class="wide-refresh" title="Odśwież dane Tauron" aria-label="Odśwież dane Tauron" ${this._loading ? "disabled" : ""}>↻ &nbsp; Odśwież dane z eLicznik</button>
           </div>
         </div>
 
         <div class="section">
           <div class="section-title"><strong>Okres rozliczeniowy</strong><span>budżet</span></div>
           <div class="info-grid">
-            <div class="info"><div class="info-label">Dziennie</div><div class="info-value">\${Number.isFinite(dailyBudget) ? this._fmt(dailyBudget,2) : "—"} kWh</div></div>
-            <div class="info"><div class="info-label">Miesięcznie</div><div class="info-value">\${Number.isFinite(monthlyBudget) ? this._fmt(monthlyBudget,2) : "—"} kWh</div></div>
+            <div class="info"><div class="info-label">Dziennie</div><div class="info-value">${Number.isFinite(dailyBudget) ? this._fmt(dailyBudget,2) : "—"} kWh</div></div>
+            <div class="info"><div class="info-label">Miesięcznie</div><div class="info-value">${Number.isFinite(monthlyBudget) ? this._fmt(monthlyBudget,2) : "—"} kWh</div></div>
           </div>
         </div>
 
         <div class="footer">
           <span>Źródło dzisiaj: /odczyty/api · historia: /energia/api</span>
-          <span>\${updated ? "Aktualizacja " + this._date(updated) + " · " + this._relative(updated) : "Brak aktualizacji"}</span>
+          <span>${updated ? "Aktualizacja " + this._date(updated) + " · " + this._relative(updated) : "Brak aktualizacji"}</span>
         </div>
       </section>
-    \`;
+    `;
 
     this.shadowRoot.querySelectorAll(".refresh, .wide-refresh").forEach(button => {
       button.addEventListener("click", () => this._refresh());
