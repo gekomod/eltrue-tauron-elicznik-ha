@@ -38,7 +38,6 @@ class TauronEnergyData:
     energia_oddana: float
     reading_date: datetime
     success: bool
-    chart_history: list[dict[str, Any]]
 
 
 @dataclass
@@ -51,6 +50,7 @@ class TauronPeriodEnergyData:
     srednia_oddana: float | None
     reading_date: datetime
     success: bool
+    chart_history: list[dict[str, Any]]
 
 
 class TauronApiClient:
