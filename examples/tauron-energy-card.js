@@ -359,6 +359,229 @@ class TauronEnergyCard extends HTMLElement {
     const daysPercent = Number.isFinite(days) ? Math.max(0, Math.min(100, (days / 365) * 100)) : 0;
 
     this.shadowRoot.innerHTML = `
+      <style>
+        :host {
+          display: block;
+          width: 100%;
+          color-scheme: dark;
+          --te-bg: #07111f;
+          --te-panel: #0b1728;
+          --te-card: #101f33;
+          --te-card-2: #0d1a2c;
+          --te-border: rgba(148, 163, 184, .14);
+          --te-text: #f4f7fb;
+          --te-muted: #8ea0b8;
+          --te-blue: #5b8cff;
+          --te-blue-2: #7c6cff;
+          --te-green: #39d98a;
+          --te-red: #ff6b7a;
+          --te-shadow: 0 18px 45px rgba(0, 0, 0, .28);
+          font-family: Inter, Roboto, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        }
+
+        * { box-sizing: border-box; }
+
+        .panel {
+          width: 100%;
+          min-height: 100%;
+          padding: 22px;
+          border-radius: 22px;
+          background:
+            radial-gradient(circle at 10% 0%, rgba(91,140,255,.13), transparent 30%),
+            radial-gradient(circle at 95% 8%, rgba(124,108,255,.10), transparent 28%),
+            linear-gradient(145deg, #081321 0%, #07111f 55%, #09172a 100%);
+          color: var(--te-text);
+          box-shadow: var(--te-shadow);
+          overflow: hidden;
+        }
+
+        .top {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          gap: 18px;
+          margin-bottom: 20px;
+        }
+
+        .brand { display: flex; align-items: center; gap: 13px; min-width: 0; }
+        .energy-icon {
+          width: 46px; height: 46px; border-radius: 14px;
+          display: grid; place-items: center;
+          font-size: 24px;
+          background: linear-gradient(135deg, rgba(91,140,255,.22), rgba(124,108,255,.25));
+          border: 1px solid rgba(125,150,255,.25);
+          box-shadow: 0 8px 24px rgba(63,95,180,.18);
+        }
+
+        h1 { margin: 0; font-size: 23px; line-height: 1.15; letter-spacing: -.02em; }
+        .subtitle { margin-top: 5px; color: var(--te-muted); font-size: 12px; }
+        .top-actions { display: flex; align-items: center; gap: 12px; }
+        .connection {
+          display: flex; align-items: center; gap: 7px;
+          color: var(--te-muted); font-size: 12px;
+          white-space: nowrap;
+        }
+        .connection-dot {
+          width: 8px; height: 8px; border-radius: 50%;
+          background: var(--te-green);
+          box-shadow: 0 0 12px rgba(57,217,138,.65);
+        }
+
+        button {
+          border: 1px solid var(--te-border);
+          color: var(--te-text);
+          background: rgba(255,255,255,.055);
+          cursor: pointer;
+          transition: .18s ease;
+        }
+        button:hover { background: rgba(91,140,255,.16); border-color: rgba(91,140,255,.38); }
+        button:focus-visible { outline: 2px solid var(--te-blue); outline-offset: 2px; }
+        button:disabled { opacity: .55; cursor: wait; }
+        .refresh {
+          width: 38px; height: 38px; border-radius: 11px;
+          font-size: 20px; display: grid; place-items: center;
+        }
+        .spin { display: inline-block; animation: spin 1s linear infinite; }
+        @keyframes spin { to { transform: rotate(360deg); } }
+
+        .hero-grid {
+          display: grid;
+          grid-template-columns: minmax(0, 1.65fr) minmax(220px, 1fr) minmax(220px, 1fr);
+          gap: 14px;
+          margin-bottom: 14px;
+        }
+        .hero, .card, .stat, .section, .hourly {
+          border: 1px solid var(--te-border);
+          background: linear-gradient(145deg, rgba(16,31,51,.96), rgba(10,23,39,.96));
+          box-shadow: 0 10px 30px rgba(0,0,0,.16);
+        }
+
+        .hero {
+          min-height: 235px;
+          border-radius: 18px;
+          padding: 23px;
+          position: relative;
+          overflow: hidden;
+        }
+        .hero::after {
+          content: "";
+          position: absolute; width: 280px; height: 280px;
+          right: -100px; top: -120px; border-radius: 50%;
+          background: radial-gradient(circle, rgba(91,140,255,.18), transparent 68%);
+          pointer-events: none;
+        }
+        .budget-ring {
+          position: absolute; right: 22px; top: 22px;
+          width: 92px; height: 92px; border-radius: 50%;
+          display: grid; place-items: center;
+          background: conic-gradient(var(--te-blue) var(--budget), rgba(255,255,255,.08) 0);
+          box-shadow: 0 0 25px rgba(91,140,255,.12);
+        }
+        .budget-ring::before {
+          content: ""; position: absolute; inset: 7px; border-radius: 50%;
+          background: #0c1b2e;
+        }
+        .budget-ring > div { position: relative; z-index: 1; text-align: center; font-weight: 800; font-size: 17px; }
+        .budget-ring span { display: block; margin-top: 2px; color: var(--te-muted); font-size: 8px; font-weight: 500; }
+        .eyebrow { color: var(--te-muted); font-size: 12px; text-transform: uppercase; letter-spacing: .12em; font-weight: 700; }
+        .eyebrow-dot { display: inline-block; width: 6px; height: 6px; border-radius: 50%; background: var(--te-blue); margin-left: 5px; }
+        .big-value { margin-top: 8px; font-size: clamp(34px, 5vw, 52px); line-height: 1; font-weight: 800; letter-spacing: -.04em; }
+        .big-value small { font-size: 16px; color: var(--te-muted); font-weight: 600; letter-spacing: 0; }
+        .hero-meta { display: flex; gap: 32px; margin-top: 28px; }
+        .hero-meta span { display: flex; flex-direction: column; gap: 5px; }
+        .hero-meta b { font-size: 9px; letter-spacing: .09em; }
+        .hero-meta strong { font-size: 13px; }
+
+        .card { border-radius: 18px; padding: 20px; min-height: 235px; }
+        .card-title, .section-title { color: var(--te-muted); font-size: 11px; text-transform: uppercase; letter-spacing: .08em; }
+        .card-date { margin-top: 8px; color: var(--te-text); font-size: 13px; font-weight: 700; }
+        .metric-row {
+          display: flex; justify-content: space-between; gap: 10px;
+          padding: 14px 0; border-bottom: 1px solid rgba(148,163,184,.10);
+          color: var(--te-muted); font-size: 12px;
+        }
+        .metric-row:last-child { border-bottom: 0; }
+        .metric-row strong { color: var(--te-text); }
+
+        .billing-days { margin-top: 24px; display: flex; align-items: baseline; gap: 8px; }
+        .billing-days strong { font-size: 38px; letter-spacing: -.04em; }
+        .billing-days span { color: var(--te-muted); font-size: 12px; }
+        .progress { height: 7px; margin-top: 17px; border-radius: 99px; background: rgba(255,255,255,.08); overflow: hidden; }
+        .progress > div { height: 100%; border-radius: inherit; background: linear-gradient(90deg, var(--te-blue), var(--te-blue-2)); }
+        .balance-small { margin-top: 19px; font-size: 18px; font-weight: 800; }
+        .negative { color: var(--te-red); }
+        .positive { color: var(--te-green); }
+
+        .stat-grid {
+          display: grid; grid-template-columns: repeat(5, minmax(0,1fr));
+          gap: 10px; margin-bottom: 14px;
+        }
+        .stat { min-width: 0; border-radius: 15px; padding: 16px; }
+        .stat-icon { color: var(--te-blue); font-size: 17px; margin-bottom: 12px; }
+        .stat-label { color: var(--te-muted); font-size: 10px; line-height: 1.35; min-height: 27px; }
+        .stat-value { margin-top: 7px; font-size: 17px; font-weight: 800; }
+
+        .section, .hourly { border-radius: 18px; padding: 18px; margin-bottom: 14px; }
+        .section-title {
+          display: flex; justify-content: space-between; align-items: center;
+          gap: 12px; margin-bottom: 13px;
+        }
+        .section-title strong { color: var(--te-text); font-size: 14px; text-transform: none; letter-spacing: 0; }
+        .section-title > span { font-size: 10px; }
+        .chart { width: 100%; height: 250px; }
+        .chart svg, .hourly svg { width: 100%; height: 100%; display: block; }
+        .grid, .hour-grid { stroke: rgba(148,163,184,.12); stroke-width: 1; }
+        .axis, .hour-axis { fill: #71839d; font-size: 10px; }
+        .area-consumed { fill: url(#energyFill); opacity: .16; }
+        .line-consumed { fill: none; stroke: #5b8cff; stroke-width: 3; stroke-linecap: round; stroke-linejoin: round; }
+        .line-exported { fill: none; stroke: #39d98a; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; opacity: .85; }
+        .dot-consumed { fill: #5b8cff; stroke: #0b1728; stroke-width: 2; }
+        .dot-exported { fill: #39d98a; stroke: #0b1728; stroke-width: 2; }
+        .hourly { min-height: 235px; }
+        .hour-bar { fill: #5b8cff; opacity: .82; }
+        .hour-bar:hover { fill: #7c6cff; opacity: 1; }
+        .legend { display: flex; gap: 18px; color: var(--te-muted); font-size: 10px; margin-top: 5px; }
+        .legend i { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 5px; }
+        .legend .c { background: #5b8cff; }
+        .legend .e { background: #39d98a; }
+
+        .details-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+        .detail-row {
+          display: flex; justify-content: space-between; gap: 12px;
+          padding: 11px 0; border-bottom: 1px solid rgba(148,163,184,.10);
+          color: var(--te-muted); font-size: 11px;
+        }
+        .detail-row strong { color: var(--te-text); white-space: nowrap; }
+        .info-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+        .info { border-radius: 12px; padding: 12px; background: rgba(255,255,255,.035); }
+        .info-label { color: var(--te-muted); font-size: 9px; text-transform: uppercase; letter-spacing: .06em; }
+        .info-value { margin-top: 5px; color: var(--te-text); font-size: 11px; font-weight: 700; }
+        .wide-refresh {
+          width: 100%; margin-top: 14px; min-height: 40px; border-radius: 11px;
+          font-size: 12px; font-weight: 700;
+        }
+        .footer {
+          display: flex; justify-content: space-between; gap: 12px;
+          color: #63748d; font-size: 9px; padding: 4px 3px 0;
+        }
+
+        @media (max-width: 1050px) {
+          .hero-grid { grid-template-columns: 1fr 1fr; }
+          .hero { grid-column: 1 / -1; }
+          .stat-grid { grid-template-columns: repeat(3, 1fr); }
+        }
+        @media (max-width: 700px) {
+          .panel { padding: 14px; border-radius: 16px; }
+          .top { align-items: flex-start; }
+          .connection { display: none; }
+          .hero-grid, .details-grid { grid-template-columns: 1fr; }
+          .hero { grid-column: auto; min-height: 220px; }
+          .stat-grid { grid-template-columns: repeat(2, 1fr); }
+          .hero-meta { gap: 18px; }
+          .footer { flex-direction: column; }
+          .chart { height: 210px; }
+        }
+      </style>
       <section class="panel" aria-label="Tauron eLicznik">
         <header class="top">
           <div class="brand">
