@@ -454,7 +454,9 @@ class TauronEnergyCard extends HTMLElement {
     this.shadowRoot.querySelectorAll(".refresh, .wide-refresh").forEach(button => {
       button.addEventListener("click", () => this._refresh());
     });
-  }fine("tauron-energy-card", TauronEnergyCard);
+  }
+
+customElements.define("tauron-energy-card", TauronEnergyCard);
 
 window.customCards = window.customCards || [];
 window.customCards.push({
