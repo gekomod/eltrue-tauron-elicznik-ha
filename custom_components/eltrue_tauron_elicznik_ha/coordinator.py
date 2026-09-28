@@ -54,6 +54,7 @@ class TauronCalculatedData:
     energia_oddana_dzien: float | None
     srednia_pobrana_dzien: float | None
     srednia_oddana_dzien: float | None
+    chart_history: list[dict[str, object]]
 
 
 class TauronElicznikCoordinator(DataUpdateCoordinator[TauronCalculatedData]):
@@ -162,4 +163,5 @@ class TauronElicznikCoordinator(DataUpdateCoordinator[TauronCalculatedData]):
             srednia_oddana_dzien=(
                 period_data.srednia_oddana if period_data else None
             ),
+            chart_history=(period_data.chart_history if period_data else []),
         )
