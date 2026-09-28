@@ -138,6 +138,27 @@ class TauronElicznikCoordinator(DataUpdateCoordinator[TauronCalculatedData]):
         kwh_left_per_day = kwh_left / days_left
         kwh_left_per_month = 30 * kwh_left_per_day
 
+        chart_history = list(period_data.chart_history if period_data else [])
+        today_iso = dt_util.now().date().isoformat()
+
+        # The chart API may lag behind the current meter reading. For today,
+        # prefer the cumulative meter readings from /odczyty/api.
+        if energy_data.energia_pobrana_dzisiaj is not None:
+            today_entry = {
+                "date": today_iso,
+                "values": [],
+                "labels": [],
+                "total": round(energy_data.energia_pobrana_dzisiaj, 3),
+                "average": None,
+                "source": "odczyty/api",
+            }
+            chart_history = [
+                entry for entry in chart_history
+                if entry.get("date") != today_iso
+            ]
+            chart_history.append(today_entry)
+        chart_history.sort(key=lambda entry: str(entry.get("date", "")))
+
         return TauronCalculatedData(
             energia_pobrana=energy_data.energia_pobrana,
             energia_oddana=energy_data.energia_oddana,
@@ -152,7 +173,9 @@ class TauronElicznikCoordinator(DataUpdateCoordinator[TauronCalculatedData]):
             kwh_left_per_day=round(kwh_left_per_day, 2),
             kwh_left_per_month=round(kwh_left_per_month, 2),
             energia_pobrana_dzien=(
-                period_data.energia_pobrana if period_data else None
+                energy_data.energia_pobrana_dzisiaj
+                if energy_data.energia_pobrana_dzisiaj is not None
+                else (period_data.energia_pobrana if period_data else None)
             ),
             energia_oddana_dzien=(
                 period_data.energia_oddana if period_data else None
@@ -163,5 +186,5 @@ class TauronElicznikCoordinator(DataUpdateCoordinator[TauronCalculatedData]):
             srednia_oddana_dzien=(
                 period_data.srednia_oddana if period_data else None
             ),
-            chart_history=(period_data.chart_history if period_data else []),
+            chart_history=chart_history,
         )
