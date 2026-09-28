@@ -229,6 +229,39 @@ class TauronEnergyCard extends HTMLElement {
     return Number.isFinite(value) ? value : NaN;
   }
 
+
+  _hourlyProfileSvg() {
+    const history = this._chartHistorySeries();
+    if (!history?.length) return "";
+    const today = new Date().toISOString().slice(0, 10);
+    const entry = history.find(day => day.date === today);
+    const values = Array.isArray(entry?.values) ? entry.values.map(Number).filter(Number.isFinite) : [];
+    if (!values.length) return "";
+
+    const W = 900, H = 190, left = 42, right = 18, top = 18, bottom = 32;
+    const plotW = W - left - right, plotH = H - top - bottom;
+    const max = Math.max(1, ...values) * 1.12;
+
+    const bars = values.map((value, i) => {
+      const slot = plotW / values.length, gap = 4, width = Math.max(4, slot - gap);
+      const x = left + i * slot + gap / 2;
+      const height = Math.max(1, (value / max) * plotH);
+      const y = top + plotH - height;
+      const label = String(i).padStart(2, "0");
+      return \`<rect class="hour-bar" x="\${x.toFixed(1)}" y="\${y.toFixed(1)}" width="\${width.toFixed(1)}" height="\${height.toFixed(1)}" rx="3"><title>\${label}:00 — \${this._fmt(value,2)} kWh</title></rect><text class="hour-axis" x="\${(x+width/2).toFixed(1)}" y="\${H-8}" text-anchor="middle">\${label}</text>\`;
+    }).join("");
+
+    return \`
+      <div class="hourly">
+        <div class="section-title"><strong>Godzinowy profil dzisiejszego zużycia</strong><span>24 godziny</span></div>
+        <svg viewBox="0 0 \${W} \${H}" preserveAspectRatio="none" role="img" aria-label="Godzinowy profil dzisiejszego zużycia">
+          <line class="hour-grid" x1="\${left}" y1="\${top+plotH}" x2="\${W-right}" y2="\${top+plotH}"></line>
+          \${bars}
+        </svg>
+      </div>
+    \`;
+  }
+
   _chartSvg() {
     const chartHistory = this._chartHistorySeries();
     const consumed = chartHistory || this._dailySeries(this._config.consumed_entity);
@@ -310,478 +343,118 @@ class TauronEnergyCard extends HTMLElement {
     const dailyExported = this._num(c.daily_exported_entity, NaN);
     const dailyAverage = this._num(c.daily_average_entity, NaN);
     const balance = this._num(c.balance_entity);
-    const daily = this._num(c.daily_budget_entity, NaN);
-    const monthly = this._num(c.monthly_budget_entity, NaN);
+    const dailyBudget = this._num(c.daily_budget_entity, NaN);
+    const monthlyBudget = this._num(c.monthly_budget_entity, NaN);
     const days = this._num(c.days_entity, NaN);
-
-    const billingStartConsumed = this._num(
-      c.billing_start_consumed_entity,
-      NaN
-    );
-    const billingStartExported = this._num(
-      c.billing_start_exported_entity,
-      NaN
-    );
-
+    const billingStartConsumed = this._num(c.billing_start_consumed_entity, NaN);
+    const billingStartExported = this._num(c.billing_start_exported_entity, NaN);
     const lastReading = this._state(c.last_reading_entity)?.state;
     const lastFetch = this._state(c.last_fetch_entity)?.state;
     const updated = lastFetch || lastReading;
-
-    const balanceClass =
-      balance < 0 ? "negative" :
-      balance > 0 ? "positive" : "";
-
-    const progress = Number.isFinite(days)
-      ? Math.max(0, Math.min(100, 100 - (days / 365) * 100))
+    const balanceClass = balance < 0 ? "negative" : balance > 0 ? "positive" : "";
+    const budgetBase = Math.abs(dailyBudget);
+    const budgetPercent = budgetBase > 0 && Number.isFinite(dailyConsumed)
+      ? Math.min(100, Math.max(0, (dailyConsumed / budgetBase) * 100))
       : 0;
+    const daysPercent = Number.isFinite(days) ? Math.max(0, Math.min(100, (days / 365) * 100)) : 0;
 
-    this.shadowRoot.innerHTML = `
-      <style>\n
-        :host {
-          display:block;
-          --te-bg:#08111f;
-          --te-text:#f4f7ff;
-          --te-muted:#93a4bd;
-          --te-border:rgba(145,170,210,.15);
-          --te-blue:#4295ff;
-          --te-purple:#7a5cff;
-          --te-green:#29dc91;
-          --te-red:#ff626b;
-        }
-        * { box-sizing:border-box; }
-
-        .panel {
-          position:relative;
-          overflow:hidden;
-          border-radius:26px;
-          padding:22px;
-          color:var(--te-text);
-          background:
-            radial-gradient(circle at 10% -10%,rgba(39,120,255,.22),transparent 32%),
-            radial-gradient(circle at 92% 0%,rgba(116,65,255,.18),transparent 30%),
-            linear-gradient(145deg,#07101d,#0b1728 58%,#091423);
-          border:1px solid var(--te-border);
-          box-shadow:0 18px 55px rgba(0,0,0,.30);
-        }
-
-        .top {
-          display:flex;
-          align-items:center;
-          justify-content:space-between;
-          gap:18px;
-          margin-bottom:18px;
-        }
-
-        .title-wrap { display:flex;gap:14px;align-items:center; }
-        .energy-icon {
-          width:52px;height:52px;border-radius:16px;
-          display:grid;place-items:center;font-size:27px;color:#fff;
-          background:linear-gradient(145deg,#1876ff,#583eff);
-          box-shadow:0 10px 30px rgba(66,112,255,.30);
-        }
-        h1 { margin:0;font-size:25px;line-height:1.1;font-weight:800;letter-spacing:-.03em; }
-        .subtitle { margin-top:5px;color:var(--te-muted);font-size:12px; }
-
-        .refresh {
-          border:1px solid var(--te-border);
-          cursor:pointer;
-          border-radius:13px;
-          width:44px;height:44px;
-          display:grid;place-items:center;
-          background:rgba(77,111,255,.13);
-          color:#9ab0ff;
-          font-size:20px;
-        }
-        .refresh:hover { background:rgba(77,111,255,.22); }
-        .refresh:disabled { opacity:.55;cursor:wait; }
-        .spin { animation:spin 1s linear infinite; }
-        @keyframes spin { to { transform:rotate(360deg); } }
-
-        .tauron-summary {
-          display:grid;
-          grid-template-columns:minmax(0,1.55fr) minmax(280px,.85fr);
-          gap:14px;
-        }
-
-        .summary-main,
-        .summary-side {
-          min-height:184px;
-          border:1px solid var(--te-border);
-          border-radius:20px;
-          background:
-            linear-gradient(145deg,rgba(18,45,87,.96),rgba(14,24,57,.96));
-          box-shadow:0 12px 30px rgba(0,0,0,.16);
-        }
-
-        .summary-main {
-          padding:22px 24px;
-          background:
-            radial-gradient(circle at 95% 10%,rgba(56,117,255,.22),transparent 35%),
-            linear-gradient(145deg,#102c58,#111c4b 58%,#0d1731);
-        }
-
-        .summary-label {
-          color:#8db2ff;
-          font-size:14px;
-          font-weight:780;
-        }
-
-        .summary-value {
-          margin-top:7px;
-          font-size:clamp(44px,6vw,62px);
-          line-height:1;
-          font-weight:850;
-          letter-spacing:-.055em;
-        }
-
-        .summary-value small {
-          font-size:.32em;
-          letter-spacing:0;
-          font-weight:700;
-        }
-
-        .summary-meta {
-          display:inline-flex;
-          align-items:center;
-          gap:7px;
-          margin-top:20px;
-          margin-right:20px;
-          color:var(--te-muted);
-          font-size:12px;
-        }
-
-        .summary-chip {
-          color:#8eabff;
-          font-size:10px;
-          font-weight:850;
-          letter-spacing:.06em;
-        }
-
-        .summary-side {
-          padding:20px;
-          background:linear-gradient(145deg,rgba(16,31,52,.98),rgba(10,22,38,.98));
-        }
-
-        .side-title {
-          color:var(--te-muted);
-          font-size:11px;
-          font-weight:750;
-          text-transform:uppercase;
-          letter-spacing:.08em;
-        }
-
-        .side-date {
-          margin-top:6px;
-          margin-bottom:15px;
-          font-size:16px;
-          font-weight:780;
-        }
-
-        .side-row {
-          display:flex;
-          justify-content:space-between;
-          gap:12px;
-          padding-top:11px;
-          margin-top:10px;
-          border-top:1px solid var(--te-border);
-          color:#aab8cc;
-          font-size:12px;
-        }
-
-        .side-row strong { color:#fff; }
-
-        .section {
-          margin-top:14px;
-          border:1px solid var(--te-border);
-          border-radius:20px;
-          padding:18px;
-          background:rgba(9,23,39,.88);
-        }
-
-        .section-title {
-          display:flex;
-          justify-content:space-between;
-          align-items:baseline;
-          margin-bottom:12px;
-        }
-
-        .section-title strong { font-size:15px; }
-        .section-title span { font-size:11px;color:var(--te-muted); }
-
-        .balance {
-          display:grid;
-          grid-template-columns:1fr auto;
-          gap:18px;
-          align-items:center;
-        }
-
-        .balance-number { font-size:29px;font-weight:820; }
-        .negative { color:var(--te-red); }
-        .positive { color:var(--te-green); }
-
-        .balance-bar {
-          height:8px;
-          margin-top:12px;
-          background:rgba(140,165,205,.14);
-          border-radius:99px;
-          overflow:hidden;
-        }
-
-        .balance-bar > div {
-          height:100%;
-          background:linear-gradient(90deg,var(--te-purple),var(--te-blue));
-          border-radius:inherit;
-        }
-
-        .days { text-align:right; }
-        .days strong { display:block;font-size:30px; }
-        .days span { color:var(--te-muted);font-size:11px; }
-
-        .chart {
-          border-radius:17px;
-          border:1px solid var(--te-border);
-          padding:12px 12px 3px;
-          background:rgba(5,15,28,.45);
-        }
-
-        .chart svg { display:block;width:100%;height:250px; }
-        .grid { stroke:rgba(150,175,215,.12);stroke-dasharray:4 7;stroke-width:1; }
-        .axis { fill:#788aa4;font-size:11px; }
-
-        .line-consumed {
-          fill:none;
-          stroke:var(--te-blue);
-          stroke-width:4;
-          stroke-linecap:round;
-          stroke-linejoin:round;
-        }
-
-        .line-exported {
-          fill:none;
-          stroke:var(--te-green);
-          stroke-width:3;
-          stroke-linecap:round;
-          stroke-linejoin:round;
-        }
-
-        .area-consumed { fill:var(--te-blue);opacity:.09; }
-        .dot-consumed { fill:#6ab4ff; }
-        .dot-exported { fill:var(--te-green); }
-
-        .legend {
-          display:flex;
-          gap:18px;
-          margin:5px 3px 2px;
-          color:var(--te-muted);
-          font-size:11px;
-        }
-
-        .legend i {
-          width:8px;height:8px;display:inline-block;border-radius:50%;margin-right:5px;
-        }
-        .legend .c { background:var(--te-blue); }
-        .legend .e { background:var(--te-green); }
-
-        .info-grid {
-          display:grid;
-          grid-template-columns:repeat(4,minmax(0,1fr));
-          gap:10px;
-        }
-
-        .info {
-          padding:14px;
-          border-radius:15px;
-          border:1px solid var(--te-border);
-          background:rgba(255,255,255,.025);
-        }
-
-        .info-label {
-          color:var(--te-muted);
-          font-size:10px;
-          text-transform:uppercase;
-          letter-spacing:.07em;
-          font-weight:700;
-        }
-
-        .info-value {
-          margin-top:6px;
-          font-size:16px;
-          font-weight:750;
-        }
-
-        .footer {
-          margin-top:14px;
-          color:#71839d;
-          font-size:10px;
-          display:flex;
-          justify-content:space-between;
-          gap:12px;
-        }
-
-        @media (max-width:900px) {
-          .tauron-summary { grid-template-columns:1fr; }
-          .info-grid { grid-template-columns:repeat(2,minmax(0,1fr)); }
-        }
-
-        @media (max-width:600px) {
-          .panel { padding:14px;border-radius:20px; }
-          .top { align-items:flex-start; }
-          .summary-main,.summary-side { min-height:auto; }
-          .balance { grid-template-columns:1fr; }
-          .days { text-align:left; }
-          .info-grid { grid-template-columns:1fr 1fr; }
-        }
-      </style>
-
+    this.shadowRoot.innerHTML = \`
       <section class="panel" aria-label="Tauron eLicznik">
         <header class="top">
-          <div class="title-wrap">
+          <div class="brand">
             <div class="energy-icon">⚡</div>
             <div>
-              <h1>${this._escape(c.title)}</h1>
+              <h1>\${this._escape(c.title)}</h1>
               <div class="subtitle">Tauron eLicznik · zużycie, oddanie i okres rozliczeniowy</div>
             </div>
           </div>
-
-          <button class="refresh" title="Odśwież dane Tauron" aria-label="Odśwież dane Tauron" ${this._loading ? "disabled" : ""}>
-            <span class="${this._loading ? "spin" : ""}">↻</span>
-          </button>
+          <div class="top-actions">
+            <div class="connection"><span class="connection-dot"></span><span>Połączony · \${updated ? this._relative(updated) : "brak danych"}</span></div>
+            <button class="refresh" title="Odśwież dane Tauron" aria-label="Odśwież dane Tauron" \${this._loading ? "disabled" : ""}><span class="\${this._loading ? "spin" : ""}">↻</span></button>
+          </div>
         </header>
 
-        <div class="tauron-summary">
-          <div class="summary-main">
-            <div class="summary-label">Pobór dzisiaj</div>
-
-            <div class="summary-value">
-              ${Number.isFinite(dailyConsumed) ? this._fmt(dailyConsumed, 2) : "—"}
-              <small>kWh</small>
-            </div>
-
-            <div class="summary-meta">
-              <span class="summary-chip">SUMA DZISIAJ</span>
-              <strong>${Number.isFinite(dailyConsumed) ? this._fmt(dailyConsumed, 2) : "—"} kWh</strong>
-            </div>
-
-            <div class="summary-meta">
-              <span class="summary-chip">ŚREDNIA</span>
-              <strong>${Number.isFinite(dailyAverage) ? this._fmt(dailyAverage, 1) : "—"} kWh/h</strong>
+        <div class="hero-grid">
+          <div class="hero">
+            <div class="budget-ring" style="--budget:\${budgetPercent}%"><div>\${this._fmt(budgetPercent,0)}%<span>dziennego budżetu</span></div></div>
+            <div class="eyebrow">Pobór dzisiaj <span class="eyebrow-dot"></span></div>
+            <div class="big-value">\${Number.isFinite(dailyConsumed) ? this._fmt(dailyConsumed,2) : "—"} <small>kWh</small></div>
+            <div class="hero-meta">
+              <span><b style="color:#89a9ff">SUMA DZISIAJ</b><strong>\${Number.isFinite(dailyConsumed) ? this._fmt(dailyConsumed,2) : "—"} kWh</strong></span>
+              <span><b style="color:#89a9ff">ŚREDNIA</b><strong>\${Number.isFinite(dailyAverage) ? this._fmt(dailyAverage,2) : "—"} kWh/h</strong></span>
             </div>
           </div>
 
-          <div class="summary-side">
-            <div class="side-title">Dane Taurona</div>
-            <div class="side-date">${this._date(lastReading)}</div>
+          <div class="card">
+            <div class="card-title">Ostatni odczyt z Taurona</div>
+            <div class="card-date">\${this._date(lastReading)}</div>
+            <div class="metric-row"><span>Pobór</span><strong>\${Number.isFinite(dailyConsumed) ? this._fmt(dailyConsumed,2) : "—"} kWh</strong></div>
+            <div class="metric-row"><span>Oddanie</span><strong>\${Number.isFinite(dailyExported) ? this._fmt(dailyExported,2) : "—"} kWh</strong></div>
+          </div>
 
-            <div class="side-row">
-              <span>Pobór dzisiaj</span>
-              <strong>${Number.isFinite(dailyConsumed) ? this._fmt(dailyConsumed, 2) : "—"} kWh</strong>
-            </div>
+          <div class="card">
+            <div class="card-title">Okres rozliczeniowy</div>
+            <div class="billing-days"><strong>\${Number.isFinite(days) ? this._fmt(days,0) : "—"}</strong><span>dni do końca</span></div>
+            <div class="progress"><div style="width:\${daysPercent}%"></div></div>
+            <div class="balance-small \${balanceClass}">\${this._fmt(balance,1)} kWh</div>
+            <div style="color:var(--te-muted);font-size:11px">Bilans okresu</div>
+          </div>
+        </div>
 
-            <div class="side-row">
-              <span>Oddanie</span>
-              <strong>${Number.isFinite(dailyExported) ? this._fmt(dailyExported, 2) : "—"} kWh</strong>
+        <div class="stat-grid">
+          <div class="stat"><div class="stat-icon">⚡</div><div class="stat-label">Dzienny budżet</div><div class="stat-value">\${Number.isFinite(dailyBudget) ? this._fmt(dailyBudget,2) : "—"} kWh</div></div>
+          <div class="stat"><div class="stat-icon">▣</div><div class="stat-label">Miesięczny budżet</div><div class="stat-value">\${Number.isFinite(monthlyBudget) ? this._fmt(monthlyBudget,2) : "—"} kWh</div></div>
+          <div class="stat"><div class="stat-icon">⌁</div><div class="stat-label">Średnie zużycie dzienne</div><div class="stat-value">\${Number.isFinite(dailyAverage) ? this._fmt(dailyAverage,2) : "—"} kWh</div></div>
+          <div class="stat"><div class="stat-icon">↗</div><div class="stat-label">Łącznie pobrano</div><div class="stat-value">\${this._fmt(consumed,1)} kWh</div></div>
+          <div class="stat"><div class="stat-icon">↙</div><div class="stat-label">Łącznie oddano</div><div class="stat-value">\${this._fmt(exported,1)} kWh</div></div>
+        </div>
+
+        <div class="section">
+          <div class="section-title"><div><strong>Zużycie energii</strong><span style="margin-left:8px">ostatnie \${Number(c.days_history || 14)} dni</span></div><span>▦ \${Number(c.days_history || 14)} dni</span></div>
+          <div class="chart">\${this._chartSvg()}</div>
+          <div class="legend"><span><i class="c"></i>Pobór (kWh)</span><span><i class="e"></i>Oddanie (kWh)</span></div>
+        </div>
+
+        \${this._hourlyProfileSvg()}
+
+        <div class="details-grid">
+          <div class="section">
+            <div class="section-title"><strong>Szczegóły licznika</strong><span>stan</span></div>
+            <div class="detail-row"><span>Stan licznika — pobrana</span><strong>\${this._fmt(consumed,1)} kWh</strong></div>
+            <div class="detail-row"><span>Stan licznika — oddana</span><strong>\${this._fmt(exported,1)} kWh</strong></div>
+            <div class="detail-row"><span>Stan na początku okresu (pobór)</span><strong>\${Number.isFinite(billingStartConsumed) ? this._fmt(billingStartConsumed,1) : "—"} kWh</strong></div>
+            <div class="detail-row"><span>Stan na początku okresu (oddanie)</span><strong>\${Number.isFinite(billingStartExported) ? this._fmt(billingStartExported,1) : "—"} kWh</strong></div>
+          </div>
+
+          <div class="section">
+            <div class="section-title"><strong>Informacje</strong><span>eLicznik</span></div>
+            <div class="info-grid">
+              <div class="info"><div class="info-label">Data ostatniego odczytu</div><div class="info-value">\${this._date(lastReading)}</div></div>
+              <div class="info"><div class="info-label">Ostatnie pobranie danych</div><div class="info-value">\${this._date(lastFetch)}</div></div>
             </div>
+            <button class="wide-refresh" title="Odśwież dane Tauron" aria-label="Odśwież dane Tauron" \${this._loading ? "disabled" : ""}>↻ &nbsp; Odśwież dane z eLicznik</button>
           </div>
         </div>
 
         <div class="section">
-          <div class="section-title">
-            <strong>Bilans okresu</strong>
-            <span>eLicznik</span>
-          </div>
-
-          <div class="balance">
-            <div>
-              <div class="balance-number ${balanceClass}">${this._fmt(balance, 1)} kWh</div>
-              <div class="balance-bar"><div></div></div>
-            </div>
-
-            <div class="days">
-              <strong>${Number.isFinite(days) ? this._fmt(days, 0) : "—"}</strong>
-              <span>dni do końca</span>
-            </div>
-          </div>
-        </div>
-
-        <div class="section">
-          <div class="section-title">
-            <strong>Zużycie energii</strong>
-            <span>ostatnie ${Number(c.days_history || 14)} dni</span>
-          </div>
-
-          <div class="chart">
-            ${this._chartSvg()}
-            <div class="legend">
-              <span><i class="c"></i>Pobrano</span>
-              <span><i class="e"></i>Oddano</span>
-            </div>
-          </div>
-        </div>
-
-        <div class="section">
-          <div class="section-title">
-            <strong>Okres rozliczeniowy</strong>
-            <span>budżet i prognoza</span>
-          </div>
-
+          <div class="section-title"><strong>Okres rozliczeniowy</strong><span>budżet</span></div>
           <div class="info-grid">
-            <div class="info">
-              <div class="info-label">Dziennie</div>
-              <div class="info-value">${Number.isFinite(daily) ? this._fmt(daily, 2) : "—"} kWh</div>
-            </div>
-            <div class="info">
-              <div class="info-label">Miesięcznie</div>
-              <div class="info-value">${Number.isFinite(monthly) ? this._fmt(monthly, 2) : "—"} kWh</div>
-            </div>
-            <div class="info">
-              <div class="info-label">Początek poboru</div>
-              <div class="info-value">${Number.isFinite(billingStartConsumed) ? this._fmt(billingStartConsumed, 2) : "—"} kWh</div>
-            </div>
-            <div class="info">
-              <div class="info-label">Początek oddania</div>
-              <div class="info-value">${Number.isFinite(billingStartExported) ? this._fmt(billingStartExported, 2) : "—"} kWh</div>
-            </div>
-          </div>
-        </div>
-
-        <div class="section">
-          <div class="section-title">
-            <strong>Stan licznika</strong>
-            <span>aktualne dane</span>
-          </div>
-
-          <div class="info-grid">
-            <div class="info">
-              <div class="info-label">Całkowicie pobrano</div>
-              <div class="info-value">${this._fmt(consumed, 2)} kWh</div>
-            </div>
-            <div class="info">
-              <div class="info-label">Całkowicie oddano</div>
-              <div class="info-value">${this._fmt(exported, 2)} kWh</div>
-            </div>
-            <div class="info">
-              <div class="info-label">Bilans</div>
-              <div class="info-value ${balanceClass}">${this._fmt(balance, 2)} kWh</div>
-            </div>
-            <div class="info">
-              <div class="info-label">Odczyt</div>
-              <div class="info-value">${this._date(lastReading)}</div>
-            </div>
+            <div class="info"><div class="info-label">Dziennie</div><div class="info-value">\${Number.isFinite(dailyBudget) ? this._fmt(dailyBudget,2) : "—"} kWh</div></div>
+            <div class="info"><div class="info-label">Miesięcznie</div><div class="info-value">\${Number.isFinite(monthlyBudget) ? this._fmt(monthlyBudget,2) : "—"} kWh</div></div>
           </div>
         </div>
 
         <div class="footer">
-          <span>Ostatnia aktualizacja: ${updated ? this._date(updated) : "—"}</span>
-          <span>${updated ? this._relative(updated) : ""}</span>
+          <span>Źródło dzisiaj: /odczyty/api · historia: /energia/api</span>
+          <span>\${updated ? "Aktualizacja " + this._date(updated) + " · " + this._relative(updated) : "Brak aktualizacji"}</span>
         </div>
       </section>
-    `;
+    \`;
 
-    this.shadowRoot.querySelector(".refresh")?.addEventListener("click", () => this._refresh());
-  }
-}
-
-customElements.define("tauron-energy-card", TauronEnergyCard);
+    this.shadowRoot.querySelectorAll(".refresh, .wide-refresh").forEach(button => {
+      button.addEventListener("click", () => this._refresh());
+    });
+  }fine("tauron-energy-card", TauronEnergyCard);
 
 window.customCards = window.customCards || [];
 window.customCards.push({
