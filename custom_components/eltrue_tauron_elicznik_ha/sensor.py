@@ -176,6 +176,19 @@ class TauronSensor(CoordinatorEntity[TauronElicznikCoordinator], SensorEntity):
         )
 
     @property
+    def extra_state_attributes(self) -> dict[str, Any] | None:
+        """Return chart history for the daily consumption sensor."""
+        if self.entity_description.key != "energia_pobrana_dzien":
+            return None
+        if self.coordinator.data is None:
+            return None
+        return {
+            "chart_history": self.coordinator.data.chart_history,
+            "chart_days": len(self.coordinator.data.chart_history),
+            "chart_source": "TAURON /energia/api",
+        }
+
+    @property
     def native_value(self) -> float | int | date | datetime | None:
         """Return the state of the sensor."""
         if self.coordinator.data is None:
