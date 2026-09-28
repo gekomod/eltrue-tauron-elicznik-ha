@@ -2,20 +2,20 @@
 class TauronEnergyCard extends HTMLElement {
   static getStubConfig() {
     return {
-      consumed_entity: "sensor.eltrue_tauron_elicznik_ha_consumed_energy",
-      exported_entity: "sensor.eltrue_tauron_elicznik_ha_exported_energy",
-      daily_consumed_entity: "sensor.serwerownia_tauron_elicznik_energia_pobrana_dzien",
-      daily_exported_entity: "sensor.serwerownia_tauron_elicznik_energia_oddana_dzien",
-      daily_average_entity: "sensor.serwerownia_tauron_elicznik_srednia_pobrana_dzien",
-      balance_entity: "sensor.eltrue_tauron_elicznik_ha_energy_balance",
-      daily_budget_entity: "sensor.eltrue_tauron_elicznik_ha_daily_energy_budget",
-      monthly_budget_entity: "sensor.eltrue_tauron_elicznik_ha_monthly_energy_budget",
-      days_entity: "sensor.eltrue_tauron_elicznik_ha_days_until_billing",
-      billing_start_consumed_entity: "sensor.eltrue_tauron_elicznik_ha_consumed_energy_at_billing_start",
-      billing_start_exported_entity: "sensor.eltrue_tauron_elicznik_ha_exported_energy_at_billing_start",
-      last_reading_entity: "sensor.eltrue_tauron_elicznik_ha_last_reading_date",
-      last_fetch_entity: "sensor.eltrue_tauron_elicznik_ha_last_data_fetch",
-      refresh_entity: "button.eltrue_tauron_elicznik_ha_refresh_data",
+      consumed_entity: "sensor.serwerownia_tauron_elicznik_energia_pobrana",
+      exported_entity: "sensor.serwerownia_tauron_elicznik_energia_oddana",
+      daily_consumed_entity: "sensor.serwerownia_tauron_elicznik_dzienne_zuzycie_energii_chart_api",
+      daily_exported_entity: "sensor.serwerownia_tauron_elicznik_dzienne_oddanie_energii_chart_api",
+      daily_average_entity: "sensor.serwerownia_tauron_elicznik_srednie_zuzycie_dzienne",
+      balance_entity: "sensor.serwerownia_tauron_elicznik_bilans_energii",
+      daily_budget_entity: "sensor.serwerownia_tauron_elicznik_dzienny_budzet_energii",
+      monthly_budget_entity: "sensor.serwerownia_tauron_elicznik_miesieczny_budzet_energii",
+      days_entity: "sensor.serwerownia_tauron_elicznik_dni_do_rozliczenia",
+      billing_start_consumed_entity: "sensor.serwerownia_tauron_elicznik_energia_pobrana_na_poczatku_okresu",
+      billing_start_exported_entity: "sensor.serwerownia_tauron_elicznik_energia_oddana_na_poczatku_okresu",
+      last_reading_entity: "sensor.serwerownia_tauron_elicznik_data_ostatniego_odczytu",
+      last_fetch_entity: "sensor.serwerownia_tauron_elicznik_ostatnie_pobranie_danych",
+      refresh_entity: "button.tauron_elicznik_odswiez_dane",
       title: "Energia",
       days_history: 14
     };
@@ -189,8 +189,25 @@ class TauronEnergyCard extends HTMLElement {
     return days;
   }
 
+  _chartHistorySeries() {
+    const state = this._state(this._config.daily_consumed_entity);
+    const history = state?.attributes?.chart_history;
+    if (!Array.isArray(history)) return null;
+
+    return history.map(day => ({
+      label: new Intl.DateTimeFormat("pl-PL", {
+        day: "2-digit",
+        month: "2-digit"
+      }).format(new Date(day.date + "T12:00:00")),
+      value: Number(day.total) || 0,
+      date: day.date,
+      values: Array.isArray(day.values) ? day.values : []
+    }));
+  }
+
   _chartSvg() {
-    const consumed = this._dailySeries(this._config.consumed_entity);
+    const chartHistory = this._chartHistorySeries();
+    const consumed = chartHistory || this._dailySeries(this._config.consumed_entity);
     const exported = this._dailySeries(this._config.exported_entity);
     const all = [...consumed.map(x => x.value), ...exported.map(x => x.value)];
     const max = Math.max(1, ...all) * 1.15;
