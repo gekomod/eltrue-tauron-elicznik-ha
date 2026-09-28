@@ -1,4 +1,4 @@
-// Tauron eLicznik card — Chart API summary
+// Tauron eLicznik card — Chart API history + current-day meter reading
 class TauronEnergyCard extends HTMLElement {
   static getStubConfig() {
     return {
@@ -182,7 +182,8 @@ class TauronEnergyCard extends HTMLElement {
           day: "2-digit",
           month: "2-digit"
         }).format(d),
-        value: delta
+        value: delta,
+        date: d.toISOString().slice(0, 10)
       });
     }
 
@@ -192,17 +193,40 @@ class TauronEnergyCard extends HTMLElement {
   _chartHistorySeries() {
     const state = this._state(this._config.daily_consumed_entity);
     const history = state?.attributes?.chart_history;
-    if (!Array.isArray(history)) return null;
+    if (!Array.isArray(history) || !history.length) return null;
 
-    return history.map(day => ({
-      label: new Intl.DateTimeFormat("pl-PL", {
-        day: "2-digit",
-        month: "2-digit"
-      }).format(new Date(day.date + "T12:00:00")),
-      value: Number(day.total) || 0,
-      date: day.date,
-      values: Array.isArray(day.values) ? day.values : []
-    }));
+    return history
+      .filter(day => day && day.date)
+      .map(day => ({
+        label: new Intl.DateTimeFormat("pl-PL", {
+          day: "2-digit",
+          month: "2-digit"
+        }).format(new Date(day.date + "T12:00:00")),
+        value: Number(day.total),
+        date: day.date,
+        values: Array.isArray(day.values) ? day.values : [],
+        source: day.source || "energia/api"
+      }))
+      .filter(day => Number.isFinite(day.value));
+  }
+
+  _todayHistoryValue() {
+    const history = this._chartHistorySeries();
+    if (!history) return null;
+
+    const today = new Date().toISOString().slice(0, 10);
+    const entry = history.find(day => day.date === today);
+    return entry ? entry.value : null;
+  }
+
+  _todayDailyConsumed() {
+    // Prefer today's value from chart_history. The coordinator replaces the
+    // stale /energia/api value for today with the cumulative /odczyty/api delta.
+    const historyValue = this._todayHistoryValue();
+    if (Number.isFinite(historyValue)) return historyValue;
+
+    const value = this._num(this._config.daily_consumed_entity, NaN);
+    return Number.isFinite(value) ? value : NaN;
   }
 
   _chartSvg() {
@@ -282,7 +306,7 @@ class TauronEnergyCard extends HTMLElement {
     const c = this._config;
     const consumed = this._num(c.consumed_entity);
     const exported = this._num(c.exported_entity);
-    const dailyConsumed = this._num(c.daily_consumed_entity, NaN);
+    const dailyConsumed = this._todayDailyConsumed();
     const dailyExported = this._num(c.daily_exported_entity, NaN);
     const dailyAverage = this._num(c.daily_average_entity, NaN);
     const balance = this._num(c.balance_entity);
@@ -324,9 +348,7 @@ class TauronEnergyCard extends HTMLElement {
           --te-purple: #8d68d8;
           --te-red: #df5961;
         }
-
         * { box-sizing: border-box; }
-
         .panel {
           position: relative;
           overflow: hidden;
@@ -340,312 +362,64 @@ class TauronEnergyCard extends HTMLElement {
           box-shadow: 0 14px 40px rgba(30,40,60,.09);
           padding: 26px;
         }
-
-        .top {
-          display: flex;
-          align-items: flex-start;
-          justify-content: space-between;
-          gap: 20px;
-          margin-bottom: 24px;
-        }
-
-        .title-wrap {
-          display: flex;
-          gap: 15px;
-          align-items: flex-start;
-        }
-
-        .energy-icon {
-          width: 50px;
-          height: 50px;
-          border-radius: 16px;
-          display: grid;
-          place-items: center;
-          font-size: 25px;
-          background: linear-gradient(135deg, rgba(79,103,232,.15), rgba(79,103,232,.05));
-          color: var(--te-blue);
-        }
-
-        h1 {
-          margin: 0;
-          font-size: 25px;
-          line-height: 1.1;
-          font-weight: 750;
-          letter-spacing: -.02em;
-        }
-
-        .subtitle {
-          margin-top: 6px;
-          color: var(--te-muted);
-          font-size: 13px;
-        }
-
-        .refresh {
-          border: 0;
-          cursor: pointer;
-          border-radius: 13px;
-          width: 42px;
-          height: 42px;
-          display: grid;
-          place-items: center;
-          background: rgba(79,103,232,.09);
-          color: var(--te-blue);
-          font-size: 20px;
-        }
-
-        .refresh:disabled {
-          opacity: .55;
-          cursor: wait;
-        }
-
-        .spin { animation: spin 1s linear infinite; }
-
-        @keyframes spin {
-          to { transform: rotate(360deg); }
-        }
-
-        .tauron-summary {
-          display: grid;
-          grid-template-columns: minmax(0, 1.45fr) minmax(260px, .75fr);
-          gap: 16px;
-        }
-
-        .summary-main,
-        .summary-side {
-          border: 1px solid var(--te-border);
-          border-radius: 22px;
-          background: linear-gradient(145deg, rgba(79,103,232,.09), rgba(79,103,232,.025));
-        }
-
-        .summary-main { padding: 24px 26px 20px; }
-
-        .summary-label {
-          color: var(--te-blue);
-          font-size: 15px;
-          font-weight: 750;
-        }
-
-        .summary-value {
-          font-size: clamp(38px, 5vw, 56px);
-          line-height: 1;
-          font-weight: 800;
-          letter-spacing: -.045em;
-        }
-
-        .summary-value small {
-          font-size: .38em;
-          font-weight: 700;
-          letter-spacing: 0;
-        }
-
-        .summary-meta {
-          display: inline-flex;
-          align-items: center;
-          gap: 8px;
-          margin-top: 17px;
-          margin-right: 18px;
-          color: var(--te-muted);
-          font-size: 13px;
-        }
-
-        .summary-chip {
-          color: var(--te-blue);
-          font-size: 11px;
-          font-weight: 800;
-          letter-spacing: .04em;
-        }
-
-        .summary-side {
-          padding: 20px;
-          background: rgba(120,130,150,.035);
-        }
-
-        .side-title {
-          color: var(--te-muted);
-          font-size: 12px;
-          font-weight: 700;
-          text-transform: uppercase;
-          letter-spacing: .06em;
-        }
-
-        .side-date {
-          margin-top: 5px;
-          margin-bottom: 15px;
-          font-size: 16px;
-          font-weight: 750;
-        }
-
-        .side-row {
-          display: flex;
-          justify-content: space-between;
-          gap: 12px;
-          padding-top: 10px;
-          margin-top: 10px;
-          border-top: 1px solid var(--te-border);
-          color: var(--te-muted);
-          font-size: 13px;
-        }
-
-        .side-row strong { color: var(--te-text); }
-
-        .section {
-          margin-top: 20px;
-          border-top: 1px solid var(--te-border);
-          padding-top: 20px;
-        }
-
-        .section-title {
-          display: flex;
-          justify-content: space-between;
-          align-items: baseline;
-          margin-bottom: 12px;
-        }
-
-        .section-title strong { font-size: 15px; }
-        .section-title span { font-size: 12px; color: var(--te-muted); }
-
-        .balance {
-          display: grid;
-          grid-template-columns: 1fr auto;
-          gap: 18px;
-          align-items: center;
-        }
-
-        .balance-number {
-          font-size: 28px;
-          font-weight: 760;
-        }
-
-        .negative { color: var(--te-red); }
-        .positive { color: var(--te-green); }
-
-        .balance-bar {
-          height: 8px;
-          margin-top: 12px;
-          background: rgba(120,130,150,.13);
-          border-radius: 99px;
-          overflow: hidden;
-        }
-
-        .balance-bar > div {
-          height: 100%;
-          width: ${progress}%;
-          background: linear-gradient(90deg, var(--te-blue), var(--te-purple));
-          border-radius: inherit;
-        }
-
-        .days { text-align: right; }
-        .days strong { display: block; font-size: 26px; }
-        .days span { color: var(--te-muted); font-size: 11px; }
-
-        .chart {
-          border-radius: 20px;
-          border: 1px solid var(--te-border);
-          padding: 14px 14px 4px;
-          background: rgba(120,130,150,.025);
-        }
-
-        .chart svg {
-          display: block;
-          width: 100%;
-          height: 250px;
-        }
-
-        .grid {
-          stroke: var(--te-border);
-          stroke-dasharray: 4 6;
-          stroke-width: 1;
-        }
-
-        .axis {
-          fill: var(--te-muted);
-          font-size: 11px;
-        }
-
-        .line-consumed {
-          fill: none;
-          stroke: var(--te-blue);
-          stroke-width: 4;
-          stroke-linecap: round;
-          stroke-linejoin: round;
-        }
-
-        .line-exported {
-          fill: none;
-          stroke: var(--te-green);
-          stroke-width: 3;
-          stroke-linecap: round;
-          stroke-linejoin: round;
-        }
-
-        .area-consumed {
-          fill: var(--te-blue);
-          opacity: .06;
-        }
-
-        .dot-consumed { fill: var(--te-blue); }
-        .dot-exported { fill: var(--te-green); }
-
-        .legend {
-          display: flex;
-          gap: 18px;
-          margin: 5px 3px 2px;
-          color: var(--te-muted);
-          font-size: 12px;
-        }
-
-        .legend i {
-          width: 8px;
-          height: 8px;
-          display: inline-block;
-          border-radius: 50%;
-          margin-right: 5px;
-        }
-
-        .legend .c { background: var(--te-blue); }
-        .legend .e { background: var(--te-green); }
-
-        .info-grid {
-          display: grid;
-          grid-template-columns: repeat(4, minmax(0, 1fr));
-          gap: 12px;
-        }
-
-        .info {
-          padding: 15px;
-          border-radius: 17px;
-          border: 1px solid var(--te-border);
-          background: rgba(120,130,150,.035);
-        }
-
-        .info-label {
-          color: var(--te-muted);
-          font-size: 11px;
-          text-transform: uppercase;
-          letter-spacing: .07em;
-          font-weight: 700;
-        }
-
-        .info-value {
-          margin-top: 6px;
-          font-size: 18px;
-          font-weight: 720;
-        }
-
-        .footer {
-          margin-top: 18px;
-          color: var(--te-muted);
-          font-size: 11px;
-          display: flex;
-          justify-content: space-between;
-          gap: 12px;
-        }
-
-        @media (max-width: 700px) {
-          .panel { padding: 18px; border-radius: 22px; }
-          .tauron-summary { grid-template-columns: 1fr; }
-          .balance { grid-template-columns: 1fr; }
-          .days { text-align: left; }
+        .top { display:flex; align-items:flex-start; justify-content:space-between; gap:20px; margin-bottom:24px; }
+        .title-wrap { display:flex; gap:15px; align-items:flex-start; }
+        .energy-icon { width:50px; height:50px; border-radius:16px; display:grid; place-items:center; font-size:25px; background:linear-gradient(135deg,rgba(79,103,232,.15),rgba(79,103,232,.05)); color:var(--te-blue); }
+        h1 { margin:0; font-size:25px; line-height:1.1; font-weight:750; letter-spacing:-.02em; }
+        .subtitle { margin-top:6px; color:var(--te-muted); font-size:13px; }
+        .refresh { border:0; cursor:pointer; border-radius:13px; width:42px; height:42px; display:grid; place-items:center; background:rgba(79,103,232,.09); color:var(--te-blue); font-size:20px; }
+        .refresh:disabled { opacity:.55; cursor:wait; }
+        .spin { animation:spin 1s linear infinite; }
+        @keyframes spin { to { transform:rotate(360deg); } }
+        .tauron-summary { display:grid; grid-template-columns:minmax(0,1.45fr) minmax(260px,.75fr); gap:16px; }
+        .summary-main,.summary-side { border:1px solid var(--te-border); border-radius:22px; background:linear-gradient(145deg,rgba(79,103,232,.09),rgba(79,103,232,.025)); }
+        .summary-main { padding:24px 26px 20px; }
+        .summary-label { color:var(--te-blue); font-size:15px; font-weight:750; }
+        .summary-value { font-size:clamp(38px,5vw,56px); line-height:1; font-weight:800; letter-spacing:-.045em; }
+        .summary-value small { font-size:.38em; font-weight:700; letter-spacing:0; }
+        .summary-meta { display:inline-flex; align-items:center; gap:8px; margin-top:17px; margin-right:18px; color:var(--te-muted); font-size:13px; }
+        .summary-chip { color:var(--te-blue); font-size:11px; font-weight:800; letter-spacing:.04em; }
+        .summary-side { padding:20px; background:rgba(120,130,150,.035); }
+        .side-title { color:var(--te-muted); font-size:12px; font-weight:700; text-transform:uppercase; letter-spacing:.06em; }
+        .side-date { margin-top:5px; margin-bottom:15px; font-size:16px; font-weight:750; }
+        .side-row { display:flex; justify-content:space-between; gap:12px; padding-top:10px; margin-top:10px; border-top:1px solid var(--te-border); color:var(--te-muted); font-size:13px; }
+        .side-row strong { color:var(--te-text); }
+        .section { margin-top:20px; border-top:1px solid var(--te-border); padding-top:20px; }
+        .section-title { display:flex; justify-content:space-between; align-items:baseline; margin-bottom:12px; }
+        .section-title strong { font-size:15px; }
+        .section-title span { font-size:12px; color:var(--te-muted); }
+        .balance { display:grid; grid-template-columns:1fr auto; gap:18px; align-items:center; }
+        .balance-number { font-size:28px; font-weight:760; }
+        .negative { color:var(--te-red); }
+        .positive { color:var(--te-green); }
+        .balance-bar { height:8px; margin-top:12px; background:rgba(120,130,150,.13); border-radius:99px; overflow:hidden; }
+        .balance-bar > div { height:100%; width:${progress}%; background:linear-gradient(90deg,var(--te-blue),var(--te-purple)); border-radius:inherit; }
+        .days { text-align:right; }
+        .days strong { display:block; font-size:26px; }
+        .days span { color:var(--te-muted); font-size:11px; }
+        .chart { border-radius:20px; border:1px solid var(--te-border); padding:14px 14px 4px; background:rgba(120,130,150,.025); }
+        .chart svg { display:block; width:100%; height:250px; }
+        .grid { stroke:var(--te-border); stroke-dasharray:4 6; stroke-width:1; }
+        .axis { fill:var(--te-muted); font-size:11px; }
+        .line-consumed { fill:none; stroke:var(--te-blue); stroke-width:4; stroke-linecap:round; stroke-linejoin:round; }
+        .line-exported { fill:none; stroke:var(--te-green); stroke-width:3; stroke-linecap:round; stroke-linejoin:round; }
+        .area-consumed { fill:var(--te-blue); opacity:.06; }
+        .dot-consumed { fill:var(--te-blue); }
+        .dot-exported { fill:var(--te-green); }
+        .legend { display:flex; gap:18px; margin:5px 3px 2px; color:var(--te-muted); font-size:12px; }
+        .legend i { width:8px; height:8px; display:inline-block; border-radius:50%; margin-right:5px; }
+        .legend .c { background:var(--te-blue); }
+        .legend .e { background:var(--te-green); }
+        .info-grid { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:12px; }
+        .info { padding:15px; border-radius:17px; border:1px solid var(--te-border); background:rgba(120,130,150,.035); }
+        .info-label { color:var(--te-muted); font-size:11px; text-transform:uppercase; letter-spacing:.07em; font-weight:700; }
+        .info-value { margin-top:6px; font-size:18px; font-weight:720; }
+        .footer { margin-top:18px; color:var(--te-muted); font-size:11px; display:flex; justify-content:space-between; gap:12px; }
+        @media (max-width:700px) {
+          .panel { padding:18px; border-radius:22px; }
+          .tauron-summary { grid-template-columns:1fr; }
+          .balance { grid-template-columns:1fr; }
+          .days { text-align:left; }
         }
       </style>
 
@@ -655,25 +429,18 @@ class TauronEnergyCard extends HTMLElement {
             <div class="energy-icon">⚡</div>
             <div>
               <h1>${this._escape(c.title)}</h1>
-              <div class="subtitle">
-                Tauron eLicznik · zużycie, oddanie i okres rozliczeniowy
-              </div>
+              <div class="subtitle">Tauron eLicznik · zużycie, oddanie i okres rozliczeniowy</div>
             </div>
           </div>
 
-          <button
-            class="refresh"
-            title="Odśwież dane Tauron"
-            aria-label="Odśwież dane Tauron"
-            ${this._loading ? "disabled" : ""}
-          >
+          <button class="refresh" title="Odśwież dane Tauron" aria-label="Odśwież dane Tauron" ${this._loading ? "disabled" : ""}>
             <span class="${this._loading ? "spin" : ""}">↻</span>
           </button>
         </header>
 
         <div class="tauron-summary">
           <div class="summary-main">
-            <div class="summary-label">Pobór</div>
+            <div class="summary-label">Pobór dzisiaj</div>
 
             <div class="summary-value">
               ${Number.isFinite(dailyConsumed) ? this._fmt(dailyConsumed, 2) : "—"}
@@ -681,36 +448,28 @@ class TauronEnergyCard extends HTMLElement {
             </div>
 
             <div class="summary-meta">
-              <span class="summary-chip">SUMA</span>
-              <strong>
-                ${Number.isFinite(dailyConsumed) ? this._fmt(dailyConsumed, 2) : "—"} kWh
-              </strong>
+              <span class="summary-chip">SUMA DZISIAJ</span>
+              <strong>${Number.isFinite(dailyConsumed) ? this._fmt(dailyConsumed, 2) : "—"} kWh</strong>
             </div>
 
             <div class="summary-meta">
               <span class="summary-chip">ŚREDNIA</span>
-              <strong>
-                ${Number.isFinite(dailyAverage) ? this._fmt(dailyAverage, 1) : "—"} kWh/h
-              </strong>
+              <strong>${Number.isFinite(dailyAverage) ? this._fmt(dailyAverage, 1) : "—"} kWh/h</strong>
             </div>
           </div>
 
           <div class="summary-side">
-            <div class="side-title">Ostatni kompletny dzień</div>
+            <div class="side-title">Dane Taurona</div>
             <div class="side-date">${this._date(lastReading)}</div>
 
             <div class="side-row">
-              <span>Pobór</span>
-              <strong>
-                ${Number.isFinite(dailyConsumed) ? this._fmt(dailyConsumed, 2) : "—"} kWh
-              </strong>
+              <span>Pobór dzisiaj</span>
+              <strong>${Number.isFinite(dailyConsumed) ? this._fmt(dailyConsumed, 2) : "—"} kWh</strong>
             </div>
 
             <div class="side-row">
               <span>Oddanie</span>
-              <strong>
-                ${Number.isFinite(dailyExported) ? this._fmt(dailyExported, 2) : "—"} kWh
-              </strong>
+              <strong>${Number.isFinite(dailyExported) ? this._fmt(dailyExported, 2) : "—"} kWh</strong>
             </div>
           </div>
         </div>
@@ -723,19 +482,12 @@ class TauronEnergyCard extends HTMLElement {
 
           <div class="balance">
             <div>
-              <div class="balance-number ${balanceClass}">
-                ${this._fmt(balance, 1)} kWh
-              </div>
-
-              <div class="balance-bar">
-                <div></div>
-              </div>
+              <div class="balance-number ${balanceClass}">${this._fmt(balance, 1)} kWh</div>
+              <div class="balance-bar"><div></div></div>
             </div>
 
             <div class="days">
-              <strong>
-                ${Number.isFinite(days) ? this._fmt(days, 0) : "—"}
-              </strong>
+              <strong>${Number.isFinite(days) ? this._fmt(days, 0) : "—"}</strong>
               <span>dni do końca</span>
             </div>
           </div>
@@ -749,7 +501,6 @@ class TauronEnergyCard extends HTMLElement {
 
           <div class="chart">
             ${this._chartSvg()}
-
             <div class="legend">
               <span><i class="c"></i>Pobrano</span>
               <span><i class="e"></i>Oddano</span>
@@ -766,30 +517,19 @@ class TauronEnergyCard extends HTMLElement {
           <div class="info-grid">
             <div class="info">
               <div class="info-label">Dziennie</div>
-              <div class="info-value">
-                ${Number.isFinite(daily) ? this._fmt(daily, 2) : "—"} kWh
-              </div>
+              <div class="info-value">${Number.isFinite(daily) ? this._fmt(daily, 2) : "—"} kWh</div>
             </div>
-
             <div class="info">
               <div class="info-label">Miesięcznie</div>
-              <div class="info-value">
-                ${Number.isFinite(monthly) ? this._fmt(monthly, 2) : "—"} kWh
-              </div>
+              <div class="info-value">${Number.isFinite(monthly) ? this._fmt(monthly, 2) : "—"} kWh</div>
             </div>
-
             <div class="info">
               <div class="info-label">Początek poboru</div>
-              <div class="info-value">
-                ${Number.isFinite(billingStartConsumed) ? this._fmt(billingStartConsumed, 2) : "—"} kWh
-              </div>
+              <div class="info-value">${Number.isFinite(billingStartConsumed) ? this._fmt(billingStartConsumed, 2) : "—"} kWh</div>
             </div>
-
             <div class="info">
               <div class="info-label">Początek oddania</div>
-              <div class="info-value">
-                ${Number.isFinite(billingStartExported) ? this._fmt(billingStartExported, 2) : "—"} kWh
-              </div>
+              <div class="info-value">${Number.isFinite(billingStartExported) ? this._fmt(billingStartExported, 2) : "—"} kWh</div>
             </div>
           </div>
         </div>
@@ -805,19 +545,14 @@ class TauronEnergyCard extends HTMLElement {
               <div class="info-label">Całkowicie pobrano</div>
               <div class="info-value">${this._fmt(consumed, 2)} kWh</div>
             </div>
-
             <div class="info">
               <div class="info-label">Całkowicie oddano</div>
               <div class="info-value">${this._fmt(exported, 2)} kWh</div>
             </div>
-
             <div class="info">
               <div class="info-label">Bilans</div>
-              <div class="info-value ${balanceClass}">
-                ${this._fmt(balance, 2)} kWh
-              </div>
+              <div class="info-value ${balanceClass}">${this._fmt(balance, 2)} kWh</div>
             </div>
-
             <div class="info">
               <div class="info-label">Odczyt</div>
               <div class="info-value">${this._date(lastReading)}</div>
@@ -826,21 +561,13 @@ class TauronEnergyCard extends HTMLElement {
         </div>
 
         <div class="footer">
-          <span>
-            Ostatnia aktualizacja:
-            ${updated ? this._date(updated) : "—"}
-          </span>
-
-          <span>
-            ${updated ? this._relative(updated) : ""}
-          </span>
+          <span>Ostatnia aktualizacja: ${updated ? this._date(updated) : "—"}</span>
+          <span>${updated ? this._relative(updated) : ""}</span>
         </div>
       </section>
     `;
 
-    this.shadowRoot
-      .querySelector(".refresh")
-      ?.addEventListener("click", () => this._refresh());
+    this.shadowRoot.querySelector(".refresh")?.addEventListener("click", () => this._refresh());
   }
 }
 
