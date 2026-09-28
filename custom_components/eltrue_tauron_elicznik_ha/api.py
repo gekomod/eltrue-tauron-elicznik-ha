@@ -192,32 +192,66 @@ class TauronApiClient:
     async def fetch_period_energy_data(
         self, query_date: date | None = None
     ) -> TauronPeriodEnergyData:
-        """Fetch daily energy using the chart API used by the official website."""
+        """Fetch the latest available daily energy using the chart API.
+
+        Tauron's chart can lag behind the current date. The website therefore
+        may show the latest completed day while today's request returns an
+        empty values[] array. Try today and then the preceding days until a
+        complete daily profile is available.
+        """
         if query_date is None:
             query_date = date.today()
 
-        date_str = query_date.strftime("%d.%m.%Y")
-        payload = {
-            "from": date_str,
-            "to": date_str,
-            "type": "consum",
-            "profile": "full time",
-        }
+        period_date: date | None = None
+        consumption: dict[str, Any] | None = None
+        last_empty_error: TauronApiError | None = None
 
-        consumption = await self._make_api_request(
-            URL_ENERGY_API,
-            payload,
-            "energia consum",
-        )
+        for days_back in range(0, 8):
+            candidate_date = query_date - timedelta(days=days_back)
+            date_str = candidate_date.strftime("%d.%m.%Y")
+            payload = {
+                "from": date_str,
+                "to": date_str,
+                "type": "consum",
+                "profile": "full time",
+            }
+
+            try:
+                candidate = await self._make_api_request(
+                    URL_ENERGY_API,
+                    payload,
+                    "energia consum",
+                )
+                self._parse_chart_energy(candidate)
+            except TauronApiError as err:
+                if "empty values[]" not in str(err):
+                    raise
+                last_empty_error = err
+                _LOGGER.debug(
+                    "No completed Tauron chart data for %s; trying previous day",
+                    candidate_date,
+                )
+                continue
+
+            period_date = candidate_date
+            consumption = candidate
+            break
+
+        if period_date is None or consumption is None:
+            raise last_empty_error or TauronApiError(
+                "Tauron chart API returned no completed daily data"
+            )
+
         consumed_total, consumed_average = self._parse_chart_energy(consumption)
+        period_date_str = period_date.strftime("%d.%m.%Y")
 
         exported_total = 0.0
         exported_average: float | None = None
 
         try:
             exported_payload = {
-                "from": date_str,
-                "to": date_str,
+                "from": period_date_str,
+                "to": period_date_str,
                 "type": "oze",
                 "profile": "full time",
             }
@@ -228,14 +262,26 @@ class TauronApiClient:
             )
             exported_total, exported_average = self._parse_chart_energy(exported)
         except TauronApiError as err:
-            _LOGGER.debug("No optional OZE data for %s: %s", date_str, err)
+            _LOGGER.debug(
+                "No optional OZE data for %s: %s",
+                period_date,
+                err,
+            )
+
+        _LOGGER.debug(
+            "Tauron chart daily data: date=%s consumed=%.3f average=%s exported=%.3f",
+            period_date,
+            consumed_total,
+            consumed_average,
+            exported_total,
+        )
 
         return TauronPeriodEnergyData(
             energia_pobrana=consumed_total,
             energia_oddana=exported_total,
             srednia_pobrana=consumed_average,
             srednia_oddana=exported_average,
-            reading_date=datetime.combine(query_date, datetime.min.time()),
+            reading_date=datetime.combine(period_date, datetime.min.time()),
             success=True,
         )
 
