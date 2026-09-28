@@ -1,130 +1,425 @@
-# Tauron eLicznik - Home Assistant Integration
+# Tauron eLicznik – Home Assistant Integration
 
-[![hacs_badge](https://img.shields.io/badge/HACS-Custom-41BDF5.svg)](https://github.com/hacs/integration)
-[![GitHub Release](https://img.shields.io/github/release/staszekj/eltrue-tauron-elicznik-ha.svg)](https://github.com/staszekj/eltrue-tauron-elicznik-ha/releases)
+[![HACS](https://img.shields.io/badge/HACS-Custom-41BDF5.svg)](https://github.com/hacs/integration)
+[![GitHub](https://img.shields.io/github/stars/gekomod/eltrue-tauron-elicznik-ha?style=flat)](https://github.com/gekomod/eltrue-tauron-elicznik-ha)
 
 ![Tauron](tauron_logo.webp)
 
-Home Assistant integration for **Tauron eLicznik** — Polish energy meter readings from Tauron Dystrybucja.
+Home Assistant integration for **Tauron eLicznik / Tauron Dystrybucja**.
 
-> **⚠️ Uwaga: integracja dotyczy systemu net-meteringu (rozliczenie ilościowe)**
->
-> Ta integracja jest przeznaczona wyłącznie dla prosumentów rozliczanych w **starszym systemie net-meteringu** (obowiązującym do 31.03.2022), w którym:
->
-> - prosument może odebrać **80%** energii oddanej do sieci (współczynnik 0,8 dla instalacji ≤10 kWp lub 0,7 dla >10 kWp — w tej integracji przyjęto 0,8),
-> - **okres rozliczeniowy wynosi 1 rok** (12 miesięcy od daty wskazanej przy konfiguracji),
-> - nadwyżka energii niewykorzystana w okresie rozliczeniowym przepada.
->
-> **Nowy system net-billingu** (rozliczenie wartościowe, obowiązujący od 01.04.2022 dla nowych prosumentów) **nie jest obsługiwany** przez tę integrację.
+The integration reads meter data from Tauron's eLicznik services and exposes it as Home Assistant sensors. It also provides historical daily consumption data from Tauron's `/energia/api`, which can be used by the included dashboard card to render a real consumption chart.
+
+> **Important:** The net-metering balance calculation in this integration is intended for the legacy quantitative net-metering scheme. The integration does not implement the value-based net-billing settlement model.
+
+---
 
 ## Features
 
-- 📊 **Energy consumption** (energia pobrana) - total kWh consumed
-- ☀️ **Energy exported** (energia oddana) - total kWh sent to grid (solar/prosumer)
-- ⚡ **Net-metering balance** - kWh left to use (80% ratio in Poland)
-- 📅 **Days until billing period ends**
-- 📈 **Daily/Monthly usage projections**
-- 🔄 **Manual refresh button** - Force data update on demand
-- 🕐 **Full timestamp** of last meter reading and last API fetch
+### Meter data
 
-## Installation
+- 📊 Total **energy consumed** (kWh)
+- ☀️ Total **energy exported** to the grid (kWh)
+- ⚡ **Net-metering balance**
+- 📅 Days remaining in the configured billing period
+- 🧮 Daily and monthly energy budget calculations
+- 🕐 Last meter reading timestamp
+- 🔄 Last successful data fetch timestamp
+- 🔘 Manual refresh button
 
-### HACS (Recommended)
+### Tauron chart API
 
-1. Open HACS in Home Assistant
-2. Click the three dots menu → **Custom repositories**
-3. Add `https://github.com/staszekj/eltrue-tauron-elicznik-ha` as **Integration**
-4. Search for "Tauron eLicznik" and install
-5. Restart Home Assistant
-6. Go to **Settings → Devices & Services → Add Integration → Tauron eLicznik**
+The integration also uses Tauron's **`/energia/api`** endpoint for period/chart data.
 
-### Manual Installation
+For the configured period it can retrieve:
 
-1. Download the latest release
-2. Copy `custom_components/eltrue_tauron_elicznik_ha` to your `config/custom_components/` folder
-3. Restart Home Assistant
-4. Add the integration via UI
+- daily consumption totals,
+- hourly consumption values,
+- hourly labels,
+- daily average,
+- a chronological history of the last **14 days**.
 
-## Configuration
+The chart history is exposed as an attribute of the daily consumption sensor:
 
-You only need three fields to set up the integration:
+`sensor.*_dzienne_zuzycie_energii_chart_api`
+
+Attribute:
+
+`chart_history`
+
+Each history item contains:
+
+```json
+{
+  "date": "2026-09-25",
+  "values": [0.1, 0.2, 0.3],
+  "labels": ["0:00 - 1:00", "1:00 - 2:00", "2:00 - 3:00"],
+  "total": 10.582,
+  "average": 0.441
+}
+```
+
+The exact number of hourly values depends on the data returned by Tauron.
+
+This approach avoids calculating daily consumption from the lifetime counter. The dashboard can therefore display the actual daily values returned by Tauron's chart API.
+
+---
+
+# Installation
+
+## HACS
+
+1. Open **HACS** in Home Assistant.
+2. Open **Integrations**.
+3. Open the three-dot menu and select **Custom repositories**.
+4. Add:
+
+```
+https://github.com/gekomod/eltrue-tauron-elicznik-ha
+```
+
+5. Select **Integration** as the repository type.
+6. Install **Tauron eLicznik**.
+7. Restart Home Assistant.
+8. Go to **Settings → Devices & services → Add integration**.
+9. Search for **Tauron eLicznik**.
+
+## Manual installation
+
+Copy:
+
+```
+custom_components/eltrue_tauron_elicznik_ha
+```
+
+to:
+
+```
+config/custom_components/eltrue_tauron_elicznik_ha
+```
+
+Then restart Home Assistant and add the integration from the UI.
+
+---
+
+# Configuration
+
+The integration is configured from the Home Assistant UI.
 
 | Field | Description | Example |
-|-------|-------------|---------|
-| **Username** | Your Tauron eLicznik email | `user@example.com` |
-| **Password** | Your Tauron eLicznik password | |
-| **Billing period start** | First day of your billing period | `2026-03-01` |
+|---|---|---|
+| **Username** | Tauron eLicznik account email | `user@example.com` |
+| **Password** | Tauron eLicznik password | — |
+| **Billing period start** | First day of the billing period | `2026-03-01` |
 
-During setup, the integration automatically fetches your meter readings as of the billing period start date from the Tauron API — no need to enter them manually. The billing period end date is also calculated automatically (start + 1 year − 1 day).
+During setup, the integration retrieves the meter values required for the beginning of the billing period automatically.
 
-## Sensors
+The billing period end is calculated from the selected start date.
 
-| Sensor | Description | Unit | Device Class |
-|--------|-------------|------|--------------|
-| `sensor.eltrue_tauron_elicznik_ha_consumed_energy` | Total energy consumed (lifetime counter) | kWh | energy |
-| `sensor.eltrue_tauron_elicznik_ha_exported_energy` | Total energy exported (lifetime counter) | kWh | energy |
-| `sensor.eltrue_tauron_elicznik_ha_consumed_energy_at_billing_start` | Consumed energy at start of billing period | kWh | energy |
-| `sensor.eltrue_tauron_elicznik_ha_exported_energy_at_billing_start` | Exported energy at start of billing period | kWh | energy |
-| `sensor.eltrue_tauron_elicznik_ha_energy_balance` | Net-metering balance remaining | kWh | energy |
-| `sensor.eltrue_tauron_elicznik_ha_daily_energy_budget` | Required daily usage to zero balance | kWh | energy |
-| `sensor.eltrue_tauron_elicznik_ha_monthly_energy_budget` | Projected monthly usage needed | kWh | energy |
-| `sensor.eltrue_tauron_elicznik_ha_days_until_billing` | Days until billing period ends | days | — |
-| `sensor.eltrue_tauron_elicznik_ha_last_reading_date` | Timestamp of last meter reading from Tauron | — | timestamp |
-| `sensor.eltrue_tauron_elicznik_ha_last_data_fetch` | Timestamp of last successful API call | — | timestamp |
+---
 
-## Button
+# Sensors
 
-| Button | Description |
-|--------|-------------|
-| `button.eltrue_tauron_elicznik_ha_refresh_data` | Manually trigger data refresh from Tauron API |
+Entity IDs are generated by Home Assistant and may differ depending on the configured device/entity naming.
 
-## Polling Interval
+The integration provides the following logical sensors:
 
-By default, data is polled every **12 hours**. Since Tauron meter readings are typically updated once per day (after midnight for the previous day), more frequent polling would just return the same data.
+| Sensor | Description | Unit |
+|---|---|---|
+| Energy consumed | Lifetime import counter | kWh |
+| Energy exported | Lifetime export counter | kWh |
+| Energy consumed at billing start | Import counter at billing start | kWh |
+| Energy exported at billing start | Export counter at billing start | kWh |
+| Energy balance | Remaining net-metering balance | kWh |
+| Daily energy budget | Required daily consumption | kWh |
+| Monthly energy budget | Projected monthly consumption | kWh |
+| Days until billing | Remaining days | d |
+| Last reading date | Last meter reading | timestamp |
+| Last data fetch | Last successful API fetch | timestamp |
+| Daily consumption – Chart API | Consumption for the latest available day | kWh |
+| Daily export – Chart API | Export for the latest available day | kWh |
+| Daily average | Average daily/hourly consumption value returned by the API | kWh |
 
-You can manually trigger a refresh anytime:
-- Press the "Refresh data" button in the UI
-- Add the button to your dashboard for easy access
-- Use the `button.press` service in automations
+The **Daily consumption – Chart API** sensor additionally contains the `chart_history` attribute described above.
 
-## Net-Metering Calculation
+## Example entity names
 
-> **Dotyczy wyłącznie systemu net-meteringu** (rozliczenia ilościowego, umowy zawarte przed 01.04.2022).
-> Nowy system net-billingu (rozliczenie wartościowe) nie jest obsługiwany.
-
-In Poland, prosumers under the **net-metering** scheme can use **80%** of the energy they export to the grid. The billing period is **1 year** (12 months). Any surplus not consumed within the billing period is lost.
-
-This integration calculates:
+A Home Assistant instance may generate names such as:
 
 ```
-kWh_left = (energia_oddana_increment × 0.8) - energia_pobrana_increment
+sensor.serwerownia_tauron_elicznik_energia_pobrana
+sensor.serwerownia_tauron_elicznik_energia_oddana
+sensor.serwerownia_tauron_elicznik_bilans_energii
+sensor.serwerownia_tauron_elicznik_dzienne_zuzycie_energii_chart_api
+sensor.serwerownia_tauron_elicznik_dzienne_oddanie_energii_chart_api
+sensor.serwerownia_tauron_elicznik_srednie_zuzycie_dzienne
+sensor.serwerownia_tauron_elicznik_dzienny_budzet_energii
+sensor.serwerownia_tauron_elicznik_miesieczny_budzet_energii
+sensor.serwerownia_tauron_elicznik_dni_do_rozliczenia
+sensor.serwerownia_tauron_elicznik_data_ostatniego_odczytu
+sensor.serwerownia_tauron_elicznik_ostatnie_pobranie_danych
 ```
 
-Where increments are calculated from the start of your billing period:
+These are examples, not fixed IDs. Use the entity IDs generated by your Home Assistant installation.
+
+---
+
+# Refresh button
+
+The integration provides a manual refresh button.
+
+Example:
 
 ```
-energia_oddana_increment = exported_energy - exported_energy_at_billing_start
-energia_pobrana_increment = consumed_energy - consumed_energy_at_billing_start
+button.tauron_elicznik_odswiez_dane
 ```
 
-The `_at_billing_start` values are fetched automatically during integration setup.
+You can:
 
-## Requirements
+- press it from the Home Assistant UI,
+- add it to a dashboard,
+- call the `button.press` service from an automation.
+
+---
+
+# Energy dashboard card
+
+The repository contains a custom Lovelace card:
+
+```
+examples/tauron-energy-card.js
+```
+
+The card displays the Tauron data in a dashboard-oriented view and, when `chart_history` is available, uses the real daily values returned by Tauron's `/energia/api`.
+
+An example dashboard configuration is available here:
+
+```
+examples/energia.yml
+```
+
+The example is already configured with the current entity naming used by the integration example.
+
+## Installing the card
+
+Copy:
+
+```
+examples/tauron-energy-card.js
+```
+
+to:
+
+```
+config/www/tauron-energy-card.js
+```
+
+Add the resource in Home Assistant:
+
+```yaml
+lovelace:
+  resources:
+    - url: /local/tauron-energy-card.js
+      type: module
+```
+
+Then add the card to a Lovelace dashboard.
+
+Example:
+
+```yaml
+type: custom:tauron-energy-card
+title: Energia
+days_history: 14
+
+consumed_entity: sensor.serwerownia_tauron_elicznik_energia_pobrana
+exported_entity: sensor.serwerownia_tauron_elicznik_energia_oddana
+balance_entity: sensor.serwerownia_tauron_elicznik_bilans_energii
+
+daily_consumed_entity: sensor.serwerownia_tauron_elicznik_dzienne_zuzycie_energii_chart_api
+daily_exported_entity: sensor.serwerownia_tauron_elicznik_dzienne_oddanie_energii_chart_api
+daily_average_entity: sensor.serwerownia_tauron_elicznik_srednie_zuzycie_dzienne
+
+daily_budget_entity: sensor.serwerownia_tauron_elicznik_dzienny_budzet_energii
+monthly_budget_entity: sensor.serwerownia_tauron_elicznik_miesieczny_budzet_energii
+days_entity: sensor.serwerownia_tauron_elicznik_dni_do_rozliczenia
+
+billing_start_consumed_entity: sensor.serwerownia_tauron_elicznik_energia_pobrana_na_poczatku_okresu
+billing_start_exported_entity: sensor.serwerownia_tauron_elicznik_energia_oddana_na_poczatku_okresu
+
+last_reading_entity: sensor.serwerownia_tauron_elicznik_data_ostatniego_odczytu
+last_fetch_entity: sensor.serwerownia_tauron_elicznik_ostatnie_pobranie_danych
+
+refresh_entity: button.tauron_elicznik_odswiez_dane
+```
+
+If your entity IDs are different, replace them with the IDs shown in **Developer Tools → States**.
+
+---
+
+# How the chart data works
+
+The integration queries Tauron's chart API for individual calendar days.
+
+For each day it requests:
+
+```
+POST /energia/api
+```
+
+with parameters equivalent to:
+
+```json
+{
+  "from": "2026-09-25",
+  "to": "2026-09-25",
+  "type": "consum",
+  "profile": "full time"
+}
+```
+
+The returned hourly values are stored in `chart_history`.
+
+The card uses:
+
+```
+chart_history[].total
+```
+
+for the daily consumption chart.
+
+This is different from calculating a daily value by subtracting two readings of the lifetime energy counter.
+
+The hourly values are also retained in:
+
+```
+chart_history[].values
+```
+
+which allows the integration/card to be extended later with an hourly or day-detail view.
+
+---
+
+# Polling
+
+The default polling interval is **12 hours**.
+
+Tauron meter data is generally updated after the end of the measurement day, so polling more frequently does not necessarily provide newer meter data.
+
+A manual refresh is available when an immediate update is required.
+
+---
+
+# Net-metering calculation
+
+> This section applies to the legacy quantitative net-metering settlement model.
+
+The integration uses the configured net-metering ratio:
+
+```
+0.8
+```
+
+The balance is calculated from the increase in imported and exported energy since the billing period started:
+
+```
+exported_increment =
+    exported_energy - exported_energy_at_billing_start
+
+consumed_increment =
+    consumed_energy - consumed_energy_at_billing_start
+
+kWh_left =
+    (exported_increment × 0.8) - consumed_increment
+```
+
+The billing-start values are retrieved automatically during setup.
+
+> **Important:** The integration does not implement value-based net-billing calculations.
+
+---
+
+# Troubleshooting
+
+## The chart is empty
+
+Check that the daily Chart API sensor exists and has a numeric state.
+
+For example:
+
+```
+sensor.serwerownia_tauron_elicznik_dzienne_zuzycie_energii_chart_api
+```
+
+Then check its attributes in **Developer Tools → States**.
+
+You should see:
+
+```
+chart_history
+chart_days
+chart_source
+```
+
+The source should be:
+
+```
+TAURON /energia/api
+```
+
+If `chart_history` is empty, trigger the integration refresh and wait for Tauron's API to return data.
+
+## No current-day data
+
+Tauron may not have published the current day's complete measurement yet. The integration searches recent days and uses the latest available non-empty chart data.
+
+## Authentication problems
+
+Verify the Tauron eLicznik account credentials. The integration requires the account credentials accepted by Tauron's eLicznik login.
+
+## Incorrect balance
+
+Check the configured **billing period start date**. The integration uses the meter values associated with that billing period start.
+
+## Card does not load
+
+Check:
+
+1. that `tauron-energy-card.js` is present in `config/www/`,
+2. that the Lovelace resource points to `/local/tauron-energy-card.js`,
+3. the browser developer console for JavaScript errors,
+4. that the entity IDs in the card configuration actually exist.
+
+After replacing the JavaScript file, perform a hard browser refresh.
+
+---
+
+# Requirements
 
 - Home Assistant 2024.1.0 or newer
-- Active Tauron eLicznik account at https://elicznik.tauron-dystrybucja.pl
+- Active Tauron eLicznik account
+- HACS is optional; manual installation is supported
 
-## Troubleshooting
+---
 
-- **Cannot connect**: Verify your credentials at https://elicznik.tauron-dystrybucja.pl
-- **No data**: Meter readings are typically available with 1-day delay
-- **Invalid auth**: Make sure you're using your email address, not username
-- **Wrong balance**: Check that your billing period start date is correct. The integration fetches meter readings for that exact date automatically
+# Repository
 
-## License
+Source code:
 
-MIT License - see [LICENSE](LICENSE) file.
+```
+https://github.com/gekomod/eltrue-tauron-elicznik-ha
+```
 
-## Credits
+Examples:
+
+- `examples/energia.yml` – dashboard configuration
+- `examples/tauron-energy-card.js` – Lovelace energy card
+
+---
+
+# License
+
+MIT License – see [LICENSE](LICENSE).
+
+# Credits
 
 Inspired by the Node-RED implementation for Tauron eLicznik.
