@@ -37,6 +37,8 @@ class TauronEnergyData:
     energia_pobrana: float
     energia_oddana: float
     reading_date: datetime
+    energia_pobrana_dzisiaj: float | None
+    energia_oddana_dzisiaj: float | None
     success: bool
 
 
@@ -186,6 +188,8 @@ class TauronApiClient:
         return TauronEnergyData(
             energia_pobrana=energia_pobrana["counter"],
             energia_oddana=energia_oddana["counter"],
+            energia_pobrana_dzisiaj=energia_pobrana.get("daily"),
+            energia_oddana_dzisiaj=energia_oddana.get("daily"),
             reading_date=reading_date,
             success=energia_pobrana["success"] and energia_oddana["success"],
         )
@@ -400,7 +404,44 @@ class TauronApiClient:
         except (KeyError, IndexError, TypeError, ValueError) as err:
             raise TauronApiError(f"Invalid API response format: {err}") from err
 
-        return {"success": True, "counter": counter_value, "date": reading_date}
+        records = []
+        for record in data["data"]:
+            try:
+                record_date = datetime.strptime(
+                    str(record["Date"]), "%d.%m.%Y %H:%M:%S"
+                )
+                record_counter = float(record["C"])
+                records.append((record_date, record_counter))
+            except (KeyError, TypeError, ValueError):
+                continue
+
+        records.sort(key=lambda item: item[0])
+        today_records = [
+            item for item in records if item[0].date() == reading_date.date()
+        ]
+        daily_value = None
+        if today_records:
+            first_time, first_counter = today_records[0]
+            last_time, last_counter = today_records[-1]
+            previous_records = [
+                item for item in records if item[0] < first_time
+            ]
+            baseline = previous_records[-1][1] if previous_records else first_counter
+            daily_value = round(max(0.0, last_counter - baseline), 3)
+            _LOGGER.debug(
+                "Tauron current-day %s: %s -> %s = %.3f kWh",
+                reading_date.date(),
+                first_time,
+                last_time,
+                daily_value,
+            )
+
+        return {
+            "success": True,
+            "counter": counter_value,
+            "date": reading_date,
+            "daily": daily_value,
+        }
 
     async def _make_api_request(
         self,
