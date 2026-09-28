@@ -8,25 +8,29 @@ views:
         title: Energia
         days_history: 14
 
-        # Liczniki narastające — do bilansu i historii
+        # Liczniki narastające — bieżący stan licznika i bilans
         consumed_entity: sensor.serwerownia_tauron_elicznik_energia_pobrana
         exported_entity: sensor.serwerownia_tauron_elicznik_energia_oddana
         balance_entity: sensor.serwerownia_tauron_elicznik_bilans_energii
 
-        # Oficjalny /energia/api Taurona — ostatni kompletny dzień
+        # Dzisiejsze zużycie jest liczone z /odczyty/api.
+        # /energia/api pozostaje źródłem historii oraz profilu godzinowego.
         daily_consumed_entity: sensor.serwerownia_tauron_elicznik_dzienne_zuzycie_energii_chart_api
         daily_exported_entity: sensor.serwerownia_tauron_elicznik_dzienne_oddanie_energii_chart_api
         daily_average_entity: sensor.serwerownia_tauron_elicznik_srednie_zuzycie_dzienne
 
-        # Okres rozliczeniowy
+        # Budżet i pozostały czas okresu rozliczeniowego
         daily_budget_entity: sensor.serwerownia_tauron_elicznik_dzienny_budzet_energii
         monthly_budget_entity: sensor.serwerownia_tauron_elicznik_miesieczny_budzet_energii
         days_entity: sensor.serwerownia_tauron_elicznik_dni_do_rozliczenia
 
+        # Stany liczników na początku okresu rozliczeniowego
         billing_start_consumed_entity: sensor.serwerownia_tauron_elicznik_energia_pobrana_na_poczatku_okresu
         billing_start_exported_entity: sensor.serwerownia_tauron_elicznik_energia_oddana_na_poczatku_okresu
 
+        # Ostatni odczyt z Taurona i czas ostatniego pobrania danych
         last_reading_entity: sensor.serwerownia_tauron_elicznik_data_ostatniego_odczytu
         last_fetch_entity: sensor.serwerownia_tauron_elicznik_ostatnie_pobranie_danych
 
+        # Ręczne odświeżenie danych
         refresh_entity: button.tauron_elicznik_odswiez_dane
