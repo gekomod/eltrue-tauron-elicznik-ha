@@ -269,14 +269,9 @@ class TauronEnergyCard extends HTMLElement {
     const all = [...consumed.map(x => x.value), ...exported.map(x => x.value)];
     const max = Math.max(1, ...all) * 1.15;
 
-    const W = 900;
-    const H = 250;
-    const left = 42;
-    const right = 18;
-    const top = 22;
-    const bottom = 34;
-    const plotW = W - left - right;
-    const plotH = H - top - bottom;
+    const W = 900, H = 280;
+    const left = 46, right = 18, top = 22, bottom = 42;
+    const plotW = W - left - right, plotH = H - top - bottom;
 
     const path = data => data.map((p, i) => {
       const x = left + (i / Math.max(1, data.length - 1)) * plotW;
@@ -284,33 +279,44 @@ class TauronEnergyCard extends HTMLElement {
       return `${i ? "L" : "M"} ${x.toFixed(1)} ${y.toFixed(1)}`;
     }).join(" ");
 
-    const points = (data, cls) => data.map((p, i) => {
+    const points = (data, cls, kind) => data.map((p, i) => {
       const x = left + (i / Math.max(1, data.length - 1)) * plotW;
       const y = top + plotH - (p.value / max) * plotH;
-      return `<circle class="${cls}" cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="3.2"><title>${p.label}: ${this._fmt(p.value, 2)} kWh</title></circle>`;
+      return `<circle class="chart-point ${cls}" data-kind="${kind}" data-label="${this._escape(p.label)}" data-value="${p.value}" cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="5"></circle>`;
     }).join("");
 
     const grid = [0, .25, .5, .75, 1].map(r => {
       const y = top + plotH - r * plotH;
-      return `<line class="grid" x1="${left}" y1="${y}" x2="${W-right}" y2="${y}"></line>`;
+      const value = max * r;
+      return `<line class="grid" x1="${left}" y1="${y}" x2="${W-right}" y2="${y}"></line>
+        <text class="y-axis" x="${left-10}" y="${y+4}" text-anchor="end">${this._fmt(value,1)}</text>`;
     }).join("");
 
     const labels = consumed.map((p, i) => {
-      if (i % 2 !== 0 && consumed.length > 8) return "";
+      if (consumed.length > 8 && i % 2 !== 0) return "";
       const x = left + (i / Math.max(1, consumed.length - 1)) * plotW;
-      return `<text class="axis" x="${x}" y="${H-8}" text-anchor="middle">${p.label}</text>`;
+      return `<text class="axis" x="${x}" y="${H-12}" text-anchor="middle">${p.label}</text>`;
     }).join("");
 
     return `
-      <svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" role="img" aria-label="Zużycie energii z ostatnich dni">
-        ${grid}
-        <path class="area-consumed" d="${path(consumed)} L ${W-right} ${top+plotH} L ${left} ${top+plotH} Z"></path>
-        <path class="line-consumed" d="${path(consumed)}"></path>
-        <path class="line-exported" d="${path(exported)}"></path>
-        ${points(consumed, "dot-consumed")}
-        ${points(exported, "dot-exported")}
-        ${labels}
-      </svg>
+      <div class="chart-wrap">
+        <svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" role="img" aria-label="Zużycie energii z ostatnich dni">
+          <defs>
+            <linearGradient id="energyFill" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stop-color="#4f7cff" stop-opacity=".22"></stop>
+              <stop offset="100%" stop-color="#4f7cff" stop-opacity=".02"></stop>
+            </linearGradient>
+          </defs>
+          ${grid}
+          <path class="area-consumed" d="${path(consumed)} L ${W-right} ${top+plotH} L ${left} ${top+plotH} Z"></path>
+          <path class="line-consumed" d="${path(consumed)}"></path>
+          <path class="line-exported" d="${path(exported)}"></path>
+          ${points(consumed, "dot-consumed", "Pobór")}
+          ${points(exported, "dot-exported", "Oddanie")}
+          ${labels}
+        </svg>
+        <div class="chart-tooltip" hidden></div>
+      </div>
     `;
   }
 
@@ -361,226 +367,144 @@ class TauronEnergyCard extends HTMLElement {
     this.shadowRoot.innerHTML = `
       <style>
         :host {
-          display: block;
-          width: 100%;
-          color-scheme: dark;
-          --te-bg: #07111f;
-          --te-panel: #0b1728;
-          --te-card: #101f33;
-          --te-card-2: #0d1a2c;
-          --te-border: rgba(148, 163, 184, .14);
-          --te-text: #f4f7fb;
-          --te-muted: #8ea0b8;
-          --te-blue: #5b8cff;
-          --te-blue-2: #7c6cff;
-          --te-green: #39d98a;
-          --te-red: #ff6b7a;
-          --te-shadow: 0 18px 45px rgba(0, 0, 0, .28);
-          font-family: Inter, Roboto, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+          display:block;
+          width:100%;
+          color-scheme:light;
+          --te-bg:#f4f7fb;
+          --te-panel:#ffffff;
+          --te-card:#ffffff;
+          --te-border:#e5eaf2;
+          --te-text:#172033;
+          --te-muted:#738096;
+          --te-blue:#4f7cff;
+          --te-blue-2:#735cff;
+          --te-green:#22a66f;
+          --te-red:#e05260;
+          font-family:Inter,Roboto,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
         }
+        *{box-sizing:border-box}
+        .panel{
+          width:100%;
+          padding:22px;
+          border:1px solid #e4e9f1;
+          border-radius:20px;
+          background:#f7f9fc;
+          color:var(--te-text);
+          box-shadow:0 10px 30px rgba(35,55,85,.08);
+        }
+        .top{display:flex;align-items:center;justify-content:space-between;gap:16px;margin-bottom:18px}
+        .brand{display:flex;align-items:center;gap:12px}
+        .energy-icon{
+          width:42px;height:42px;border-radius:12px;display:grid;place-items:center;
+          font-size:21px;background:#edf3ff;color:var(--te-blue);border:1px solid #dce7ff
+        }
+        h1{margin:0;font-size:22px;line-height:1.15;letter-spacing:-.02em}
+        .subtitle{margin-top:4px;color:var(--te-muted);font-size:12px}
+        .top-actions{display:flex;align-items:center;gap:10px}
+        .connection{display:flex;align-items:center;gap:7px;color:var(--te-muted);font-size:11px;white-space:nowrap}
+        .connection-dot{width:8px;height:8px;border-radius:50%;background:#25b87a;box-shadow:0 0 0 4px #e5f8ef}
+        button{
+          border:1px solid #dfe5ee;color:#33415a;background:#fff;cursor:pointer;
+          transition:.16s ease
+        }
+        button:hover{background:#f2f6ff;border-color:#bfcfff}
+        button:focus-visible{outline:2px solid var(--te-blue);outline-offset:2px}
+        button:disabled{opacity:.55;cursor:wait}
+        .refresh{width:38px;height:38px;border-radius:11px;font-size:19px;display:grid;place-items:center}
+        .spin{display:inline-block;animation:spin 1s linear infinite}
+        @keyframes spin{to{transform:rotate(360deg)}}
 
-        * { box-sizing: border-box; }
+        .hero-grid{
+          display:grid;grid-template-columns:minmax(0,1.6fr) minmax(220px,1fr) minmax(220px,1fr);
+          gap:12px;margin-bottom:12px
+        }
+        .hero,.card,.stat,.section,.hourly{
+          background:var(--te-panel);border:1px solid var(--te-border);
+          box-shadow:0 5px 18px rgba(35,55,85,.055)
+        }
+        .hero{min-height:220px;border-radius:16px;padding:22px;position:relative;overflow:hidden}
+        .hero::after{
+          content:"";position:absolute;width:250px;height:250px;right:-90px;top:-120px;border-radius:50%;
+          background:radial-gradient(circle,#edf3ff 0,rgba(237,243,255,0) 70%);pointer-events:none
+        }
+        .budget-ring{
+          position:absolute;right:22px;top:22px;width:86px;height:86px;border-radius:50%;
+          display:grid;place-items:center;
+          background:conic-gradient(var(--te-blue) var(--budget),#edf0f5 0)
+        }
+        .budget-ring::before{content:"";position:absolute;inset:7px;border-radius:50%;background:#fff}
+        .budget-ring>div{position:relative;z-index:1;text-align:center;font-weight:800;font-size:16px}
+        .budget-ring span{display:block;margin-top:2px;color:var(--te-muted);font-size:7px;font-weight:600}
+        .eyebrow{color:var(--te-muted);font-size:11px;text-transform:uppercase;letter-spacing:.11em;font-weight:700}
+        .eyebrow-dot{display:inline-block;width:6px;height:6px;border-radius:50%;background:var(--te-blue);margin-left:5px}
+        .big-value{margin-top:7px;font-size:clamp(36px,4vw,50px);line-height:1;font-weight:800;letter-spacing:-.045em}
+        .big-value small{font-size:16px;color:var(--te-muted);font-weight:600;letter-spacing:0}
+        .hero-meta{display:flex;gap:34px;margin-top:28px}
+        .hero-meta span{display:flex;flex-direction:column;gap:5px}
+        .hero-meta b{font-size:9px;letter-spacing:.08em;color:var(--te-blue)!important}
+        .hero-meta strong{font-size:13px}
+        .card{border-radius:16px;padding:19px;min-height:220px}
+        .card-title,.section-title{color:var(--te-muted);font-size:10px;text-transform:uppercase;letter-spacing:.08em}
+        .card-date{margin-top:7px;color:var(--te-text);font-size:12px;font-weight:700}
+        .metric-row{display:flex;justify-content:space-between;gap:10px;padding:13px 0;border-bottom:1px solid #eef1f5;color:var(--te-muted);font-size:12px}
+        .metric-row:last-child{border-bottom:0}
+        .metric-row strong{color:var(--te-text)}
+        .billing-days{margin-top:22px;display:flex;align-items:baseline;gap:7px}
+        .billing-days strong{font-size:36px;letter-spacing:-.04em}
+        .billing-days span{color:var(--te-muted);font-size:11px}
+        .progress{height:7px;margin-top:15px;border-radius:99px;background:#edf0f5;overflow:hidden}
+        .progress>div{height:100%;border-radius:inherit;background:linear-gradient(90deg,var(--te-blue),var(--te-blue-2))}
+        .balance-small{margin-top:17px;font-size:17px;font-weight:800}
+        .negative{color:var(--te-red)}.positive{color:var(--te-green)}
 
-        .panel {
-          width: 100%;
-          min-height: 100%;
-          padding: 22px;
-          border-radius: 22px;
-          background:
-            radial-gradient(circle at 10% 0%, rgba(91,140,255,.13), transparent 30%),
-            radial-gradient(circle at 95% 8%, rgba(124,108,255,.10), transparent 28%),
-            linear-gradient(145deg, #081321 0%, #07111f 55%, #09172a 100%);
-          color: var(--te-text);
-          box-shadow: var(--te-shadow);
-          overflow: hidden;
-        }
+        .stat-grid{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:10px;margin-bottom:12px}
+        .stat{min-width:0;border-radius:14px;padding:15px}
+        .stat-icon{color:var(--te-blue);font-size:16px;margin-bottom:10px}
+        .stat-label{color:var(--te-muted);font-size:10px;line-height:1.35;min-height:27px}
+        .stat-value{margin-top:6px;font-size:16px;font-weight:800}
 
-        .top {
-          display: flex;
-          align-items: center;
-          justify-content: space-between;
-          gap: 18px;
-          margin-bottom: 20px;
+        .section,.hourly{border-radius:16px;padding:17px;margin-bottom:12px}
+        .section-title{display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:11px}
+        .section-title strong{color:var(--te-text);font-size:14px;text-transform:none;letter-spacing:0}
+        .section-title>span{font-size:10px}
+        .chart-wrap{position:relative;width:100%;height:280px}
+        .chart-wrap svg{width:100%;height:100%;display:block;overflow:visible}
+        .grid,.hour-grid{stroke:#edf0f5;stroke-width:1}
+        .axis,.y-axis,.hour-axis{fill:#8a96a8;font-size:10px}
+        .y-axis{font-size:9px}
+        .area-consumed{fill:url(#energyFill)}
+        .line-consumed{fill:none;stroke:#4f7cff;stroke-width:3;stroke-linecap:round;stroke-linejoin:round}
+        .line-exported{fill:none;stroke:#22a66f;stroke-width:2.5;stroke-linecap:round;stroke-linejoin:round}
+        .chart-point{cursor:pointer;transition:r .12s ease,stroke-width .12s ease}
+        .chart-point:hover{r:7}
+        .dot-consumed{fill:#4f7cff;stroke:#fff;stroke-width:2.5}
+        .dot-exported{fill:#22a66f;stroke:#fff;stroke-width:2.5}
+        .chart-tooltip{
+          position:absolute;z-index:5;min-width:135px;padding:9px 11px;border-radius:10px;
+          background:#172033;color:#fff;box-shadow:0 8px 24px rgba(22,32,51,.22);
+          pointer-events:none;font-size:11px
         }
+        .chart-tooltip[hidden]{display:none}
+        .chart-tooltip strong,.chart-tooltip span,.chart-tooltip b{display:block}
+        .chart-tooltip span{margin-top:3px;color:#c5cfdd}.chart-tooltip b{margin-top:4px;font-size:13px}
+        .hourly{min-height:225px}
+        .hour-bar{fill:#4f7cff;opacity:.78}
+        .hour-bar:hover{fill:#735cff;opacity:1}
+        .legend{display:flex;gap:18px;color:var(--te-muted);font-size:10px;margin-top:5px}
+        .legend i{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:5px}
+        .legend .c{background:#4f7cff}.legend .e{background:#22a66f}
 
-        .brand { display: flex; align-items: center; gap: 13px; min-width: 0; }
-        .energy-icon {
-          width: 46px; height: 46px; border-radius: 14px;
-          display: grid; place-items: center;
-          font-size: 24px;
-          background: linear-gradient(135deg, rgba(91,140,255,.22), rgba(124,108,255,.25));
-          border: 1px solid rgba(125,150,255,.25);
-          box-shadow: 0 8px 24px rgba(63,95,180,.18);
-        }
-
-        h1 { margin: 0; font-size: 23px; line-height: 1.15; letter-spacing: -.02em; }
-        .subtitle { margin-top: 5px; color: var(--te-muted); font-size: 12px; }
-        .top-actions { display: flex; align-items: center; gap: 12px; }
-        .connection {
-          display: flex; align-items: center; gap: 7px;
-          color: var(--te-muted); font-size: 12px;
-          white-space: nowrap;
-        }
-        .connection-dot {
-          width: 8px; height: 8px; border-radius: 50%;
-          background: var(--te-green);
-          box-shadow: 0 0 12px rgba(57,217,138,.65);
-        }
-
-        button {
-          border: 1px solid var(--te-border);
-          color: var(--te-text);
-          background: rgba(255,255,255,.055);
-          cursor: pointer;
-          transition: .18s ease;
-        }
-        button:hover { background: rgba(91,140,255,.16); border-color: rgba(91,140,255,.38); }
-        button:focus-visible { outline: 2px solid var(--te-blue); outline-offset: 2px; }
-        button:disabled { opacity: .55; cursor: wait; }
-        .refresh {
-          width: 38px; height: 38px; border-radius: 11px;
-          font-size: 20px; display: grid; place-items: center;
-        }
-        .spin { display: inline-block; animation: spin 1s linear infinite; }
-        @keyframes spin { to { transform: rotate(360deg); } }
-
-        .hero-grid {
-          display: grid;
-          grid-template-columns: minmax(0, 1.65fr) minmax(220px, 1fr) minmax(220px, 1fr);
-          gap: 14px;
-          margin-bottom: 14px;
-        }
-        .hero, .card, .stat, .section, .hourly {
-          border: 1px solid var(--te-border);
-          background: linear-gradient(145deg, rgba(16,31,51,.96), rgba(10,23,39,.96));
-          box-shadow: 0 10px 30px rgba(0,0,0,.16);
-        }
-
-        .hero {
-          min-height: 235px;
-          border-radius: 18px;
-          padding: 23px;
-          position: relative;
-          overflow: hidden;
-        }
-        .hero::after {
-          content: "";
-          position: absolute; width: 280px; height: 280px;
-          right: -100px; top: -120px; border-radius: 50%;
-          background: radial-gradient(circle, rgba(91,140,255,.18), transparent 68%);
-          pointer-events: none;
-        }
-        .budget-ring {
-          position: absolute; right: 22px; top: 22px;
-          width: 92px; height: 92px; border-radius: 50%;
-          display: grid; place-items: center;
-          background: conic-gradient(var(--te-blue) var(--budget), rgba(255,255,255,.08) 0);
-          box-shadow: 0 0 25px rgba(91,140,255,.12);
-        }
-        .budget-ring::before {
-          content: ""; position: absolute; inset: 7px; border-radius: 50%;
-          background: #0c1b2e;
-        }
-        .budget-ring > div { position: relative; z-index: 1; text-align: center; font-weight: 800; font-size: 17px; }
-        .budget-ring span { display: block; margin-top: 2px; color: var(--te-muted); font-size: 8px; font-weight: 500; }
-        .eyebrow { color: var(--te-muted); font-size: 12px; text-transform: uppercase; letter-spacing: .12em; font-weight: 700; }
-        .eyebrow-dot { display: inline-block; width: 6px; height: 6px; border-radius: 50%; background: var(--te-blue); margin-left: 5px; }
-        .big-value { margin-top: 8px; font-size: clamp(34px, 5vw, 52px); line-height: 1; font-weight: 800; letter-spacing: -.04em; }
-        .big-value small { font-size: 16px; color: var(--te-muted); font-weight: 600; letter-spacing: 0; }
-        .hero-meta { display: flex; gap: 32px; margin-top: 28px; }
-        .hero-meta span { display: flex; flex-direction: column; gap: 5px; }
-        .hero-meta b { font-size: 9px; letter-spacing: .09em; }
-        .hero-meta strong { font-size: 13px; }
-
-        .card { border-radius: 18px; padding: 20px; min-height: 235px; }
-        .card-title, .section-title { color: var(--te-muted); font-size: 11px; text-transform: uppercase; letter-spacing: .08em; }
-        .card-date { margin-top: 8px; color: var(--te-text); font-size: 13px; font-weight: 700; }
-        .metric-row {
-          display: flex; justify-content: space-between; gap: 10px;
-          padding: 14px 0; border-bottom: 1px solid rgba(148,163,184,.10);
-          color: var(--te-muted); font-size: 12px;
-        }
-        .metric-row:last-child { border-bottom: 0; }
-        .metric-row strong { color: var(--te-text); }
-
-        .billing-days { margin-top: 24px; display: flex; align-items: baseline; gap: 8px; }
-        .billing-days strong { font-size: 38px; letter-spacing: -.04em; }
-        .billing-days span { color: var(--te-muted); font-size: 12px; }
-        .progress { height: 7px; margin-top: 17px; border-radius: 99px; background: rgba(255,255,255,.08); overflow: hidden; }
-        .progress > div { height: 100%; border-radius: inherit; background: linear-gradient(90deg, var(--te-blue), var(--te-blue-2)); }
-        .balance-small { margin-top: 19px; font-size: 18px; font-weight: 800; }
-        .negative { color: var(--te-red); }
-        .positive { color: var(--te-green); }
-
-        .stat-grid {
-          display: grid; grid-template-columns: repeat(5, minmax(0,1fr));
-          gap: 10px; margin-bottom: 14px;
-        }
-        .stat { min-width: 0; border-radius: 15px; padding: 16px; }
-        .stat-icon { color: var(--te-blue); font-size: 17px; margin-bottom: 12px; }
-        .stat-label { color: var(--te-muted); font-size: 10px; line-height: 1.35; min-height: 27px; }
-        .stat-value { margin-top: 7px; font-size: 17px; font-weight: 800; }
-
-        .section, .hourly { border-radius: 18px; padding: 18px; margin-bottom: 14px; }
-        .section-title {
-          display: flex; justify-content: space-between; align-items: center;
-          gap: 12px; margin-bottom: 13px;
-        }
-        .section-title strong { color: var(--te-text); font-size: 14px; text-transform: none; letter-spacing: 0; }
-        .section-title > span { font-size: 10px; }
-        .chart { width: 100%; height: 250px; }
-        .chart svg, .hourly svg { width: 100%; height: 100%; display: block; }
-        .grid, .hour-grid { stroke: rgba(148,163,184,.12); stroke-width: 1; }
-        .axis, .hour-axis { fill: #71839d; font-size: 10px; }
-        .area-consumed { fill: url(#energyFill); opacity: .16; }
-        .line-consumed { fill: none; stroke: #5b8cff; stroke-width: 3; stroke-linecap: round; stroke-linejoin: round; }
-        .line-exported { fill: none; stroke: #39d98a; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; opacity: .85; }
-        .dot-consumed { fill: #5b8cff; stroke: #0b1728; stroke-width: 2; }
-        .dot-exported { fill: #39d98a; stroke: #0b1728; stroke-width: 2; }
-        .hourly { min-height: 235px; }
-        .hour-bar { fill: #5b8cff; opacity: .82; }
-        .hour-bar:hover { fill: #7c6cff; opacity: 1; }
-        .legend { display: flex; gap: 18px; color: var(--te-muted); font-size: 10px; margin-top: 5px; }
-        .legend i { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 5px; }
-        .legend .c { background: #5b8cff; }
-        .legend .e { background: #39d98a; }
-
-        .details-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
-        .detail-row {
-          display: flex; justify-content: space-between; gap: 12px;
-          padding: 11px 0; border-bottom: 1px solid rgba(148,163,184,.10);
-          color: var(--te-muted); font-size: 11px;
-        }
-        .detail-row strong { color: var(--te-text); white-space: nowrap; }
-        .info-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
-        .info { border-radius: 12px; padding: 12px; background: rgba(255,255,255,.035); }
-        .info-label { color: var(--te-muted); font-size: 9px; text-transform: uppercase; letter-spacing: .06em; }
-        .info-value { margin-top: 5px; color: var(--te-text); font-size: 11px; font-weight: 700; }
-        .wide-refresh {
-          width: 100%; margin-top: 14px; min-height: 40px; border-radius: 11px;
-          font-size: 12px; font-weight: 700;
-        }
-        .footer {
-          display: flex; justify-content: space-between; gap: 12px;
-          color: #63748d; font-size: 9px; padding: 4px 3px 0;
-        }
-
-        @media (max-width: 1050px) {
-          .hero-grid { grid-template-columns: 1fr 1fr; }
-          .hero { grid-column: 1 / -1; }
-          .stat-grid { grid-template-columns: repeat(3, 1fr); }
-        }
-        @media (max-width: 700px) {
-          .panel { padding: 14px; border-radius: 16px; }
-          .top { align-items: flex-start; }
-          .connection { display: none; }
-          .hero-grid, .details-grid { grid-template-columns: 1fr; }
-          .hero { grid-column: auto; min-height: 220px; }
-          .stat-grid { grid-template-columns: repeat(2, 1fr); }
-          .hero-meta { gap: 18px; }
-          .footer { flex-direction: column; }
-          .chart { height: 210px; }
-        }
+        .details-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+        .detail-row{display:flex;justify-content:space-between;gap:12px;padding:10px 0;border-bottom:1px solid #eef1f5;color:var(--te-muted);font-size:11px}
+        .detail-row strong{color:var(--te-text);white-space:nowrap}
+        .info-grid{display:grid;grid-template-columns:1fr 1fr;gap:9px}
+        .info{border-radius:11px;padding:11px;background:#f7f9fc}
+        .info-label{color:var(--te-muted);font-size:9px;text-transform:uppercase;letter-spacing:.06em}
+        .info-value{margin-top:5px;color:var(--te-text);font-size:11px;font-weight:700}
+        .wide-refresh{width:100%;margin-top:13px;min-height:40px;border-radius:10px;font-size:12px;font-weight:700}
+        .footer{display:flex;justify-content:space-between;gap:12px;color:#8c98a9;font-size:9px;padding:3px 2px 0}
+        @media(max-width:1050px){.hero-grid{grid-template-columns:1fr 1fr}.hero{grid-column:1/-1}.stat-grid{grid-template-columns:repeat(3,1fr)}}
+        @media(max-width:700px){.panel{padding:13px;border-radius:14px}.top{align-items:flex-start}.connection{display:none}.hero-grid,.details-grid{grid-template-columns:1fr}.hero{grid-column:auto;min-height:210px}.stat-grid{grid-template-columns:repeat(2,1fr)}.hero-meta{gap:18px}.footer{flex-direction:column}.chart-wrap{height:230px}}
       </style>
       <section class="panel" aria-label="Tauron eLicznik">
         <header class="top">
@@ -677,6 +601,27 @@ class TauronEnergyCard extends HTMLElement {
     this.shadowRoot.querySelectorAll(".refresh, .wide-refresh").forEach(button => {
       button.addEventListener("click", () => this._refresh());
     });
+
+    const chart = this.shadowRoot.querySelector(".chart-wrap");
+    const tooltip = this.shadowRoot.querySelector(".chart-tooltip");
+    if (chart && tooltip) {
+      chart.querySelectorAll(".chart-point").forEach(point => {
+        point.addEventListener("mouseenter", () => {
+          tooltip.hidden = false;
+          tooltip.innerHTML = `<strong>${point.dataset.kind}</strong><span>${point.dataset.label}</span><b>${this._fmt(Number(point.dataset.value), 2)} kWh</b>`;
+        });
+        point.addEventListener("mousemove", event => {
+          const rect = chart.getBoundingClientRect();
+          const x = event.clientX - rect.left;
+          const y = event.clientY - rect.top;
+          tooltip.style.left = `${Math.max(8, Math.min(x + 12, rect.width - 150))}px`;
+          tooltip.style.top = `${Math.max(8, y - 70)}px`;
+        });
+        point.addEventListener("mouseleave", () => {
+          tooltip.hidden = true;
+        });
+      });
+    }
   }
 }
 
