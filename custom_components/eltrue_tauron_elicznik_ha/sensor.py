@@ -185,7 +185,7 @@ class TauronSensor(CoordinatorEntity[TauronElicznikCoordinator], SensorEntity):
         return {
             "chart_history": self.coordinator.data.chart_history,
             "chart_days": len(self.coordinator.data.chart_history),
-            "chart_source": "TAURON /energia/api",
+            "chart_source": "TAURON /odczyty/api (today) + /energia/api (history)",
         }
 
     @property
