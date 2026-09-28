@@ -14,9 +14,9 @@ views:
         balance_entity: sensor.serwerownia_tauron_elicznik_bilans_energii
 
         # Oficjalny /energia/api Taurona — ostatni kompletny dzień
-        daily_consumed_entity: sensor.serwerownia_tauron_elicznik_energia_pobrana_dzien
-        daily_exported_entity: sensor.serwerownia_tauron_elicznik_energia_oddana_dzien
-        daily_average_entity: sensor.serwerownia_tauron_elicznik_srednia_pobrana_dzien
+        daily_consumed_entity: sensor.serwerownia_tauron_elicznik_dzienne_zuzycie_energii_chart_api
+        daily_exported_entity: sensor.serwerownia_tauron_elicznik_dzienne_oddanie_energii_chart_api
+        daily_average_entity: sensor.serwerownia_tauron_elicznik_srednie_zuzycie_dzienne
 
         # Okres rozliczeniowy
         daily_budget_entity: sensor.serwerownia_tauron_elicznik_dzienny_budzet_energii
