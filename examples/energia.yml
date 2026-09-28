@@ -1,0 +1,32 @@
+views:
+  - title: Energia
+    path: energia
+    icon: mdi:lightning-bolt
+    type: panel
+    cards:
+      - type: custom:tauron-energy-card
+        title: Energia
+        days_history: 14
+
+        # Liczniki narastające — do bilansu i historii
+        consumed_entity: sensor.serwerownia_tauron_elicznik_energia_pobrana
+        exported_entity: sensor.serwerownia_tauron_elicznik_energia_oddana
+        balance_entity: sensor.serwerownia_tauron_elicznik_bilans_energii
+
+        # Oficjalny /energia/api Taurona — ostatni kompletny dzień
+        daily_consumed_entity: sensor.serwerownia_tauron_elicznik_energia_pobrana_dzien
+        daily_exported_entity: sensor.serwerownia_tauron_elicznik_energia_oddana_dzien
+        daily_average_entity: sensor.serwerownia_tauron_elicznik_srednia_pobrana_dzien
+
+        # Okres rozliczeniowy
+        daily_budget_entity: sensor.serwerownia_tauron_elicznik_dzienny_budzet_energii
+        monthly_budget_entity: sensor.serwerownia_tauron_elicznik_miesieczny_budzet_energii
+        days_entity: sensor.serwerownia_tauron_elicznik_dni_do_rozliczenia
+
+        billing_start_consumed_entity: sensor.serwerownia_tauron_elicznik_energia_pobrana_na_poczatku_okresu
+        billing_start_exported_entity: sensor.serwerownia_tauron_elicznik_energia_oddana_na_poczatku_okresu
+
+        last_reading_entity: sensor.serwerownia_tauron_elicznik_data_ostatniego_odczytu
+        last_fetch_entity: sensor.serwerownia_tauron_elicznik_ostatnie_pobranie_danych
+
+        refresh_entity: button.tauron_elicznik_odswiez_dane
