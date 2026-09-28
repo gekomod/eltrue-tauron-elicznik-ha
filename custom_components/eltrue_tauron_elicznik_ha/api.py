@@ -38,6 +38,7 @@ class TauronEnergyData:
     energia_oddana: float
     reading_date: datetime
     success: bool
+    chart_history: list[dict[str, Any]]
 
 
 @dataclass
@@ -268,6 +269,8 @@ class TauronApiClient:
                 err,
             )
 
+        chart_history = await self._fetch_chart_history(query_date, 14)
+
         _LOGGER.debug(
             "Tauron chart daily data: date=%s consumed=%.3f average=%s exported=%.3f",
             period_date,
@@ -283,7 +286,68 @@ class TauronApiClient:
             srednia_oddana=exported_average,
             reading_date=datetime.combine(period_date, datetime.min.time()),
             success=True,
+            chart_history=chart_history,
         )
+
+    async def _fetch_chart_history(
+        self, query_date: date, days: int
+    ) -> list[dict[str, Any]]:
+        """Fetch daily hourly chart data for the dashboard."""
+        history: list[dict[str, Any]] = []
+        for days_back in range(0, days):
+            candidate_date = query_date - timedelta(days=days_back)
+            date_str = candidate_date.strftime("%d.%m.%Y")
+            payload = {
+                "from": date_str,
+                "to": date_str,
+                "type": "consum",
+                "profile": "full time",
+            }
+            try:
+                data = await self._make_api_request(
+                    URL_ENERGY_API, payload, "energia historia"
+                )
+                parsed = self._parse_chart_profile(data)
+                if parsed:
+                    history.append({
+                        "date": candidate_date.isoformat(),
+                        "values": parsed["values"],
+                        "labels": parsed["labels"],
+                        "total": parsed["total"],
+                        "average": parsed["average"],
+                    })
+            except TauronApiError as err:
+                _LOGGER.debug(
+                    "No chart history for %s: %s", candidate_date, err
+                )
+
+        history.reverse()
+        return history
+
+    @staticmethod
+    def _parse_chart_profile(data: dict[str, Any]) -> dict[str, Any] | None:
+        """Return the hourly values and labels used by Tauron's chart."""
+        if not data.get("success"):
+            return None
+        payload = data.get("data")
+        if not isinstance(payload, dict):
+            return None
+        values = payload.get("values")
+        if not isinstance(values, list) or not values:
+            return None
+        numeric_values = []
+        for value in values:
+            try:
+                numeric_values.append(round(float(value or 0), 3))
+            except (TypeError, ValueError):
+                numeric_values.append(0.0)
+        labels = payload.get("tooltipLabels") or payload.get("labels") or []
+        return {
+            "values": numeric_values,
+            "labels": [str(x) for x in labels],
+            "total": round(sum(numeric_values), 3),
+            "average": payload.get("average"),
+        }
 
     @staticmethod
     def _parse_chart_energy(data: dict[str, Any]) -> tuple[float, float | None]:
