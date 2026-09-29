@@ -46,7 +46,10 @@
       "energia_pobrana_dzien": {"name": "Daily consumed energy (chart API)"},
       "energia_oddana_dzien": {"name": "Daily exported energy (chart API)"},
       "srednia_pobrana_dzien": {"name": "Daily consumption average"},
-      "srednia_oddana_dzien": {"name": "Daily export average"}
+      "srednia_oddana_dzien": {"name": "Daily export average"},
+      "tariff": {"name": "Tariff"},
+      "pse_today": {"name": "Energetyczny Kompas — today"},
+      "pse_tomorrow": {"name": "Energetyczny Kompas — tomorrow"}
     }
   },
   "exceptions": {
