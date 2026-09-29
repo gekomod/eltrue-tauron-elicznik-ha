@@ -33,6 +33,22 @@ class TauronSensorEntityDescription(SensorEntityDescription):
     value_fn: Callable[[TauronCalculatedData], Any]
 
 
+def _pse_current_state(values: list[dict[str, Any]]) -> str | None:
+    """Return the latest active PSE recommendation."""
+    active = [item for item in values if item.get("is_active", True)]
+    if not active:
+        active = values
+    if not active:
+        return None
+
+    def sort_key(item: dict[str, Any]) -> str:
+        return str(item.get("dtime", ""))
+
+    latest = sorted(active, key=sort_key)[-1]
+    state = latest.get("state")
+    return str(state) if state is not None else None
+
+
 SENSOR_DESCRIPTIONS: tuple[TauronSensorEntityDescription, ...] = (
     TauronSensorEntityDescription(
         key="kwh_left",
@@ -133,6 +149,20 @@ SENSOR_DESCRIPTIONS: tuple[TauronSensorEntityDescription, ...] = (
         native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
         state_class=SensorStateClass.MEASUREMENT,
         value_fn=lambda data: data.srednia_oddana_dzien,
+    ),    TauronSensorEntityDescription(
+        key="tariff",
+        translation_key="tariff",
+        value_fn=lambda data: data.tariff,
+    ),
+    TauronSensorEntityDescription(
+        key="pse_today",
+        translation_key="pse_today",
+        value_fn=lambda data: _pse_current_state(data.pse_today),
+    ),
+    TauronSensorEntityDescription(
+        key="pse_tomorrow",
+        translation_key="pse_tomorrow",
+        value_fn=lambda data: _pse_current_state(data.pse_tomorrow),
     ),
 )
 
@@ -176,7 +206,7 @@ class TauronSensor(CoordinatorEntity[TauronElicznikCoordinator], SensorEntity):
         )
 
     @property
-    def extra_state_attributes(self) -> dict[str, Any] | None:
+    def _chart_state_attributes(self) -> dict[str, Any] | None:
         """Return chart history for the daily consumption sensor."""
         if self.entity_description.key != "energia_pobrana_dzien":
             return None
@@ -189,7 +219,29 @@ class TauronSensor(CoordinatorEntity[TauronElicznikCoordinator], SensorEntity):
         }
 
     @property
-    def native_value(self) -> float | int | date | datetime | None:
+    def extra_state_attributes(self) -> dict[str, Any] | None:
+        """Return useful PSE/tariff details."""
+        if self.coordinator.data is None:
+            return None
+
+        key = self.entity_description.key
+        if key == "tariff":
+            return {"source": "TAURON /energia/api"}
+        if key in {"pse_today", "pse_tomorrow"}:
+            values = (
+                self.coordinator.data.pse_today
+                if key == "pse_today"
+                else self.coordinator.data.pse_tomorrow
+            )
+            return {
+                "source": "PSE Energetyczny Kompas /api/pdgsz",
+                "hours": values,
+                "hours_count": len(values),
+            }
+        return None
+
+    @property
+    def native_value(self) -> Any:
         """Return the state of the sensor."""
         if self.coordinator.data is None:
             return None
