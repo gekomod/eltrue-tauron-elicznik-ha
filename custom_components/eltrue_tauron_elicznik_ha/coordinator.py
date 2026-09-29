@@ -144,12 +144,14 @@ class TauronElicznikCoordinator(DataUpdateCoordinator[TauronCalculatedData]):
         # The chart API may lag behind the current meter reading. For today,
         # prefer the cumulative meter readings from /odczyty/api.
         if energy_data.energia_pobrana_dzisiaj is not None:
+            existing_today = next(
+                (entry for entry in chart_history if entry.get("date") == today_iso),
+                None,
+            )
             today_entry = {
+                **(existing_today or {}),
                 "date": today_iso,
-                "values": [],
-                "labels": [],
                 "total": round(energy_data.energia_pobrana_dzisiaj, 3),
-                "average": None,
                 "source": "odczyty/api",
             }
             chart_history = [
