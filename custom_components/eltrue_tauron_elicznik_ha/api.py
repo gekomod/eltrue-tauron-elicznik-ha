@@ -53,6 +53,7 @@ class TauronPeriodEnergyData:
     reading_date: datetime
     success: bool
     chart_history: list[dict[str, Any]]
+    tariff: str | None
 
 
 class TauronApiClient:
@@ -248,6 +249,7 @@ class TauronApiClient:
             )
 
         consumed_total, consumed_average = self._parse_chart_energy(consumption)
+        tariff = self._parse_tariff(consumption)
         period_date_str = period_date.strftime("%d.%m.%Y")
 
         exported_total = 0.0
@@ -291,7 +293,89 @@ class TauronApiClient:
             reading_date=datetime.combine(period_date, datetime.min.time()),
             success=True,
             chart_history=chart_history,
+            tariff=tariff,
         )
+
+    @staticmethod
+    def _parse_tariff(data: dict[str, Any]) -> str | None:
+        """Return the tariff code from the official Tauron chart response."""
+        payload = data.get("data")
+        if not isinstance(payload, dict):
+            return None
+
+        tariff = payload.get("tariff")
+        if tariff:
+            return str(tariff).strip().upper()
+
+        all_data = payload.get("allData")
+        if isinstance(all_data, list):
+            for item in all_data:
+                if isinstance(item, dict):
+                    value = item.get("Taryfa") or item.get("tariff")
+                    if value:
+                        return str(value).strip().upper()
+        return None
+
+    async def fetch_pse_peak_hours(
+        self, target_date: date | None = None
+    ) -> list[dict[str, Any]]:
+        """Fetch PSE Energetyczny Kompas data for the requested business day."""
+        if target_date is None:
+            target_date = dt_util.now().date()
+
+        date_str = target_date.isoformat()
+        url = (
+            "https://api.raporty.pse.pl/api/pdgsz"
+            "?$filter=business_date%20eq%20'"
+            f"{date_str}'"
+            "&$orderby=dtime"
+        )
+
+        try:
+            async with self._session.get(url) as response:
+                if response.status != 200:
+                    raise TauronApiError(
+                        f"PSE PDGSZ request failed with status {response.status}"
+                    )
+                data = await response.json(content_type=None)
+        except TauronApiError:
+            raise
+        except Exception as err:
+            raise TauronApiError(
+                f"Failed to fetch PSE Energetyczny Kompas: {err}"
+            ) from err
+
+        values = data.get("value", []) if isinstance(data, dict) else []
+        if not isinstance(values, list):
+            return []
+
+        status_map = {
+            0: "Zalecane użytkowanie",
+            1: "Normalne użytkowanie",
+            2: "Zalecane oszczędzanie",
+            3: "Wymagane ograniczenie",
+        }
+
+        result: list[dict[str, Any]] = []
+        for item in values:
+            if not isinstance(item, dict):
+                continue
+            dtime = item.get("dtime") or item.get("dtime_utc")
+            usage = item.get("usage_fcst")
+            if dtime is None or usage is None:
+                continue
+            try:
+                usage_int = int(usage)
+            except (TypeError, ValueError):
+                continue
+            result.append({
+                "dtime": str(dtime),
+                "usage_fcst": usage_int,
+                "state": status_map.get(usage_int, "Nieznany status"),
+                "business_date": str(item.get("business_date") or date_str),
+                "is_active": bool(item.get("is_active", True)),
+            })
+        return result
 
     async def _fetch_chart_history(
         self, query_date: date, days: int
