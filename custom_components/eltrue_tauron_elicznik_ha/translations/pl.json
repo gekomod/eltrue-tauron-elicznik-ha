@@ -40,7 +40,10 @@
       "energia_pobrana_dzien": {"name": "Dzienne zużycie energii (chart API)"},
       "energia_oddana_dzien": {"name": "Dzienne oddanie energii (chart API)"},
       "srednia_pobrana_dzien": {"name": "Średnie zużycie dzienne"},
-      "srednia_oddana_dzien": {"name": "Średnie oddanie dzienne"}
+      "srednia_oddana_dzien": {"name": "Średnie oddanie dzienne"},
+      "tariff": {"name": "Taryfa"},
+      "pse_today": {"name": "Energetyczny Kompas — dzisiaj"},
+      "pse_tomorrow": {"name": "Energetyczny Kompas — jutro"}
     }
   }
 }
