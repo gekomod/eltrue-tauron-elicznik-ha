@@ -55,6 +55,9 @@ class TauronCalculatedData:
     srednia_pobrana_dzien: float | None
     srednia_oddana_dzien: float | None
     chart_history: list[dict[str, object]]
+    tariff: str | None
+    pse_today: list[dict[str, object]]
+    pse_tomorrow: list[dict[str, object]]
 
 
 class TauronElicznikCoordinator(DataUpdateCoordinator[TauronCalculatedData]):
@@ -97,6 +100,8 @@ class TauronElicznikCoordinator(DataUpdateCoordinator[TauronCalculatedData]):
         """Fetch data from Tauron API and calculate net-metering values."""
         fetch_time = dt_util.now()
         period_data: TauronPeriodEnergyData | None = None
+        pse_today: list[dict[str, object]] = []
+        pse_tomorrow: list[dict[str, object]] = []
 
         try:
             await self._client.authenticate()
@@ -112,6 +117,14 @@ class TauronElicznikCoordinator(DataUpdateCoordinator[TauronCalculatedData]):
                     "Tauron chart API unavailable; keeping period sensors unavailable: %s",
                     err,
                 )
+
+            try:
+                pse_today = await self._client.fetch_pse_peak_hours(dt_util.now().date())
+                pse_tomorrow = await self._client.fetch_pse_peak_hours(
+                    dt_util.now().date() + timedelta(days=1)
+                )
+            except TauronApiError as err:
+                _LOGGER.warning("PSE Energetyczny Kompas unavailable: %s", err)
         except TauronApiError as err:
             raise UpdateFailed(f"Error fetching Tauron data: {err}") from err
         finally:
@@ -189,4 +202,7 @@ class TauronElicznikCoordinator(DataUpdateCoordinator[TauronCalculatedData]):
                 period_data.srednia_oddana if period_data else None
             ),
             chart_history=chart_history,
+            tariff=period_data.tariff if period_data else None,
+            pse_today=pse_today,
+            pse_tomorrow=pse_tomorrow,
         )
