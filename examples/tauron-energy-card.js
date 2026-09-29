@@ -16,6 +16,9 @@ class TauronEnergyCard extends HTMLElement {
       last_reading_entity: "sensor.serwerownia_tauron_elicznik_data_ostatniego_odczytu",
       last_fetch_entity: "sensor.serwerownia_tauron_elicznik_ostatnie_pobranie_danych",
       refresh_entity: "button.tauron_elicznik_odswiez_dane",
+      tariff_entity: "sensor.serwerownia_tauron_elicznik_taryfa",
+      pse_today_entity: "sensor.serwerownia_tauron_elicznik_pse_today",
+      pse_tomorrow_entity: "sensor.serwerownia_tauron_elicznik_pse_tomorrow",
       title: "Energia",
       days_history: 14,
       auto_refresh_minutes: 60
@@ -334,6 +337,40 @@ class TauronEnergyCard extends HTMLElement {
   }
 
 
+  _pseStatusClass(value) {
+    const text = String(value || "").toLowerCase();
+    if (text.includes("wymagane")) return "pse-red";
+    if (text.includes("oszczędzanie")) return "pse-yellow";
+    if (text.includes("normalne")) return "pse-green";
+    if (text.includes("zalecane użytkowanie")) return "pse-darkgreen";
+    return "pse-neutral";
+  }
+
+  _pseTimeline(entityId) {
+    const hours = this._state(entityId)?.attributes?.hours;
+    if (!Array.isArray(hours)) return "";
+    return hours.map(item => {
+      const time = String(item.dtime || "").slice(11, 16);
+      const status = String(item.state || "Nieznany status");
+      return `<div class="pse-hour ${this._pseStatusClass(status)}" title="${this._escape(status)}"><span>${time}</span><i></i></div>`;
+    }).join("");
+  }
+
+  _pseCard(title, subtitle, entityId) {
+    const state = this._state(entityId);
+    const status = state?.state && !["unknown","unavailable"].includes(state.state)
+      ? state.state
+      : "Brak opublikowanych danych";
+    const timeline = this._pseTimeline(entityId);
+    return `<div class="pse-card">
+      <div class="pse-card-head">
+        <div><strong>${title}</strong><span>${subtitle}</span></div>
+        <b class="${this._pseStatusClass(status)}">${this._escape(status)}</b>
+      </div>
+      <div class="pse-timeline">${timeline || '<div class="pse-empty">PSE nie opublikowało jeszcze godzin dla tego dnia.</div>'}</div>
+    </div>`;
+  }
+
   _hourlyProfileSvg() {
     const history = this._chartHistorySeries();
     if (!history?.length) return "";
@@ -568,6 +605,29 @@ class TauronEnergyCard extends HTMLElement {
 
         .section,.hourly{border-radius:16px;padding:17px;margin-bottom:12px}
         .section-title{display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:11px}
+        .energy-context{margin-bottom:12px;padding:17px;border-radius:16px;background:#fff;border:1px solid var(--te-border);box-shadow:0 5px 18px rgba(35,55,85,.055)}
+        .context-head{display:flex;justify-content:space-between;align-items:center;gap:15px;margin-bottom:12px}
+        .context-kicker{color:var(--te-blue);font-size:9px;font-weight:800;letter-spacing:.08em}
+        .context-head h2{margin:4px 0 0;font-size:15px}
+        .context-head p{margin:4px 0 0;color:var(--te-muted);font-size:10px}
+        .tariff-pill{border:1px solid #dce6f3;background:#f7faff;border-radius:12px;padding:9px 12px;color:var(--te-muted);font-size:9px}
+        .tariff-pill span{margin-right:6px}.tariff-pill strong{font-size:18px;color:var(--te-blue)}
+        .pse-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+        .pse-card{padding:13px;border:1px solid #e5eaf2;border-radius:13px;background:#fbfcfe}
+        .pse-card-head{display:flex;justify-content:space-between;gap:10px;align-items:flex-start}
+        .pse-card-head strong{display:block;font-size:12px;color:var(--te-text)}
+        .pse-card-head span{display:block;margin-top:2px;font-size:9px;color:var(--te-muted)}
+        .pse-card-head>b{padding:5px 8px;border-radius:99px;font-size:8px;white-space:nowrap;background:#f1f3f6;color:#6e7b8e}
+        .pse-card-head>b.pse-darkgreen{background:#e5f8ee;color:#108956}
+        .pse-card-head>b.pse-green{background:#edf8f1;color:#397b5c}
+        .pse-card-head>b.pse-yellow{background:#fff4d8;color:#a87800}
+        .pse-card-head>b.pse-red{background:#ffe8eb;color:#b84450}
+        .pse-timeline{display:grid;grid-template-columns:repeat(24,minmax(0,1fr));gap:3px;margin-top:12px}
+        .pse-hour{text-align:center;min-width:0}.pse-hour span{display:block;color:#8a96a8;font-size:7px;margin-bottom:3px}.pse-hour i{display:block;height:20px;border-radius:4px;background:#dfe5ec}
+        .pse-hour.pse-darkgreen i{background:#27ae71}.pse-hour.pse-green i{background:#8bcfac}.pse-hour.pse-yellow i{background:#f0c04d}.pse-hour.pse-red i{background:#df5b66}
+        .pse-empty{grid-column:1/-1;padding:12px 0;color:var(--te-muted);font-size:10px}
+        .pse-legend{display:flex;gap:13px;flex-wrap:wrap;margin-top:9px;color:var(--te-muted);font-size:8px}
+        .pse-legend span{display:inline-flex;align-items:center;gap:5px}.pse-legend i{width:7px;height:7px;border-radius:50%}.legend-darkgreen{background:#27ae71}.legend-green{background:#8bcfac}.legend-yellow{background:#f0c04d}.legend-red{background:#df5b66}
         .chart-header{align-items:center}
         .energy-controls{display:flex;align-items:center;gap:5px;flex-wrap:wrap}
         .date-nav,.date-current,.auto-select{height:30px;border:1px solid #dfe6ef;background:#fff;color:var(--te-text);border-radius:8px;font-size:10px}
@@ -616,7 +676,7 @@ class TauronEnergyCard extends HTMLElement {
         .wide-refresh{width:100%;margin-top:13px;min-height:40px;border-radius:10px;font-size:12px;font-weight:700}
         .footer{display:flex;justify-content:space-between;gap:12px;color:#8c98a9;font-size:9px;padding:3px 2px 0}
         @media(max-width:1050px){.hero-grid{grid-template-columns:1fr 1fr}.hero{grid-column:1/-1}.stat-grid{grid-template-columns:repeat(3,1fr)}}
-        @media(max-width:700px){.panel{padding:13px;border-radius:14px}.top{align-items:flex-start}.connection{display:none}.hero-grid,.details-grid{grid-template-columns:1fr}.hero{grid-column:auto;min-height:210px}.stat-grid{grid-template-columns:repeat(2,1fr)}.hero-meta{gap:18px}.footer{flex-direction:column}.chart-wrap{height:230px}}
+        @media(max-width:700px){.panel{padding:13px;border-radius:14px}.top{align-items:flex-start}.connection{display:none}.hero-grid,.details-grid,.pse-grid{grid-template-columns:1fr}.hero{grid-column:auto;min-height:210px}.stat-grid{grid-template-columns:repeat(2,1fr)}.hero-meta{gap:18px}.footer{flex-direction:column}.chart-wrap{height:230px}.context-head{align-items:flex-start;flex-direction:column}}
       </style>
       <section class="panel" aria-label="Tauron eLicznik">
         <header class="top">
@@ -666,6 +726,27 @@ class TauronEnergyCard extends HTMLElement {
           <div class="stat"><div class="stat-icon">⌁</div><div class="stat-label">Średnie zużycie dzienne</div><div class="stat-value">${Number.isFinite(dailyAverage) ? this._fmt(dailyAverage,2) : "—"} kWh</div></div>
           <div class="stat"><div class="stat-icon">↗</div><div class="stat-label">Łącznie pobrano</div><div class="stat-value">${this._fmt(consumed,1)} kWh</div></div>
           <div class="stat"><div class="stat-icon">↙</div><div class="stat-label">Łącznie oddano</div><div class="stat-value">${this._fmt(exported,1)} kWh</div></div>
+        </div>
+
+        <div class="energy-context">
+          <div class="context-head">
+            <div>
+              <div class="context-kicker">TARYFA I SYSTEM ENERGETYCZNY</div>
+              <h2>Informacje energetyczne</h2>
+              <p>Informacja pobrana ze strony Energetycznego Kompasu Polskich Sieci Elektroenergetycznych (PSE).</p>
+            </div>
+            <div class="tariff-pill"><span>TARYFA</span><strong>${this._escape(this._state(c.tariff_entity)?.state || "—")}</strong></div>
+          </div>
+          <div class="pse-grid">
+            ${this._pseCard("Dzisiaj", "Energetyczne godziny szczytu", c.pse_today_entity)}
+            ${this._pseCard("Jutro · D+1", "Planowane energetyczne godziny szczytu", c.pse_tomorrow_entity)}
+          </div>
+          <div class="pse-legend">
+            <span><i class="legend-darkgreen"></i>Zalecane użytkowanie</span>
+            <span><i class="legend-green"></i>Normalne użytkowanie</span>
+            <span><i class="legend-yellow"></i>Zalecane oszczędzanie</span>
+            <span><i class="legend-red"></i>Wymagane ograniczenie</span>
+          </div>
         </div>
 
         <div class="section">
