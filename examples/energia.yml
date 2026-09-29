@@ -7,6 +7,7 @@ views:
       - type: custom:tauron-energy-card
         title: Energia
         days_history: 14
+        auto_refresh_minutes: 60
 
         # Liczniki narastające — bieżący stan licznika i bilans
         consumed_entity: sensor.serwerownia_tauron_elicznik_energia_pobrana
