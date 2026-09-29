@@ -17,7 +17,8 @@ class TauronEnergyCard extends HTMLElement {
       last_fetch_entity: "sensor.serwerownia_tauron_elicznik_ostatnie_pobranie_danych",
       refresh_entity: "button.tauron_elicznik_odswiez_dane",
       title: "Energia",
-      days_history: 14
+      days_history: 14,
+      auto_refresh_minutes: 60
     };
   }
 
@@ -29,11 +30,18 @@ class TauronEnergyCard extends HTMLElement {
     this._history = [];
     this._loading = false;
     this._timer = null;
+    this._autoRefreshTimer = null;
+    this._selectedDate = null;
+    this._autoRefreshMinutes = 60;
   }
 
   setConfig(config) {
     this._config = { ...TauronEnergyCard.getStubConfig(), ...config };
+    this._autoRefreshMinutes = [60, 120].includes(Number(this._config.auto_refresh_minutes))
+      ? Number(this._config.auto_refresh_minutes)
+      : 60;
     this._render();
+    this._startAutoRefresh();
   }
 
   set hass(hass) {
@@ -48,6 +56,104 @@ class TauronEnergyCard extends HTMLElement {
 
   disconnectedCallback() {
     if (this._timer) clearTimeout(this._timer);
+    if (this._autoRefreshTimer) clearInterval(this._autoRefreshTimer);
+  }
+
+
+  _dateKey(date) {
+    const d = date instanceof Date ? date : new Date(date);
+    return [
+      d.getFullYear(),
+      String(d.getMonth() + 1).padStart(2, "0"),
+      String(d.getDate()).padStart(2, "0")
+    ].join("-");
+  }
+
+  _historyDateKeys() {
+    const history = this._chartHistorySeries();
+    return history ? history.map(entry => entry.date).filter(Boolean).sort() : [];
+  }
+
+  _selectedHistoryEntry() {
+    const history = this._chartHistorySeries();
+    if (!history?.length) return null;
+
+    if (!this._selectedDate) {
+      const today = this._dateKey(new Date());
+      this._selectedDate = history.some(entry => entry.date === today)
+        ? today
+        : history[history.length - 1].date;
+    }
+
+    return history.find(entry => entry.date === this._selectedDate)
+      || history[history.length - 1]
+      || null;
+  }
+
+  _dateLabel(dateKey) {
+    if (!dateKey) return "Brak daty";
+    const today = new Date();
+    const yesterday = new Date(today);
+    yesterday.setDate(today.getDate() - 1);
+
+    if (dateKey === this._dateKey(today)) return "Dzisiaj";
+    if (dateKey === this._dateKey(yesterday)) return "Wczoraj";
+
+    const parts = dateKey.split("-").map(Number);
+    return new Date(parts[0], parts[1] - 1, parts[2]).toLocaleDateString("pl-PL", {
+      weekday: "short",
+      day: "2-digit",
+      month: "2-digit",
+      year: "numeric"
+    });
+  }
+
+  _changeDate(offset) {
+    const keys = this._historyDateKeys();
+    if (!keys.length) return;
+
+    const current = keys.indexOf(this._selectedDate);
+    const next = (current < 0 ? keys.length - 1 : current) + offset;
+
+    if (next < 0 || next >= keys.length) return;
+
+    this._selectedDate = keys[next];
+    this._render();
+  }
+
+  _goToday() {
+    const today = this._dateKey(new Date());
+    const keys = this._historyDateKeys();
+    this._selectedDate = keys.includes(today) ? today : (keys[keys.length - 1] || today);
+    this._render();
+  }
+
+  _setAutoRefreshMinutes(value) {
+    this._autoRefreshMinutes = Number(value) === 120 ? 120 : 60;
+    this._config.auto_refresh_minutes = this._autoRefreshMinutes;
+    this._startAutoRefresh();
+    this._render();
+  }
+
+  _startAutoRefresh() {
+    if (this._autoRefreshTimer) clearInterval(this._autoRefreshTimer);
+
+    this._autoRefreshTimer = setInterval(async () => {
+      if (this._loading || !this._hass) return;
+
+      try {
+        if (this._config.refresh_entity) {
+          await this._hass.callService("button", "press", {
+            entity_id: this._config.refresh_entity
+          });
+        }
+
+        await new Promise(resolve => setTimeout(resolve, 1500));
+        await this._loadHistory();
+      } catch (err) {
+        console.warn("Tauron Energy Card: automatic refresh failed", err);
+      }
+    }, this._autoRefreshMinutes * 60 * 1000);
   }
 
   _scheduleHistoryRefresh() {
@@ -211,30 +317,27 @@ class TauronEnergyCard extends HTMLElement {
   }
 
   _todayHistoryValue() {
-    const history = this._chartHistorySeries();
-    if (!history) return null;
-
-    const today = new Date().toISOString().slice(0, 10);
-    const entry = history.find(day => day.date === today);
+    const entry = this._selectedHistoryEntry();
     return entry ? entry.value : null;
   }
 
   _todayDailyConsumed() {
-    // Prefer today's value from chart_history. The coordinator replaces the
-    // stale /energia/api value for today with the cumulative /odczyty/api delta.
     const historyValue = this._todayHistoryValue();
     if (Number.isFinite(historyValue)) return historyValue;
 
-    const value = this._num(this._config.daily_consumed_entity, NaN);
-    return Number.isFinite(value) ? value : NaN;
+    if (this._selectedDate === this._dateKey(new Date())) {
+      const value = this._num(this._config.daily_consumed_entity, NaN);
+      return Number.isFinite(value) ? value : NaN;
+    }
+
+    return NaN;
   }
 
 
   _hourlyProfileSvg() {
     const history = this._chartHistorySeries();
     if (!history?.length) return "";
-    const today = new Date().toISOString().slice(0, 10);
-    const entry = history.find(day => day.date === today);
+    const entry = this._selectedHistoryEntry();
     const values = Array.isArray(entry?.values) ? entry.values.map(Number).filter(Number.isFinite) : [];
     if (!values.length) return "";
 
@@ -253,7 +356,7 @@ class TauronEnergyCard extends HTMLElement {
 
     return `
       <div class="hourly">
-        <div class="section-title"><strong>Godzinowy profil dzisiejszego zużycia</strong><span>24 godziny</span></div>
+        <div class="section-title"><strong>Godzinowy profil zużycia · ${this._dateLabel(entry?.date || this._selectedDate)}</strong><span>24 godziny</span></div>
         <svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" role="img" aria-label="Godzinowy profil dzisiejszego zużycia">
           <line class="hour-grid" x1="${left}" y1="${top+plotH}" x2="${W-right}" y2="${top+plotH}"></line>
           ${bars}
@@ -465,6 +568,15 @@ class TauronEnergyCard extends HTMLElement {
 
         .section,.hourly{border-radius:16px;padding:17px;margin-bottom:12px}
         .section-title{display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:11px}
+        .chart-header{align-items:center}
+        .energy-controls{display:flex;align-items:center;gap:5px;flex-wrap:wrap}
+        .date-nav,.date-current,.auto-select{height:30px;border:1px solid #dfe6ef;background:#fff;color:var(--te-text);border-radius:8px;font-size:10px}
+        .date-nav{width:31px;padding:0;font-size:18px;line-height:1;cursor:pointer}
+        .date-nav:hover:not(:disabled){background:#edf3ff;border-color:#c8d9ff;color:var(--te-blue)}
+        .date-nav:disabled{opacity:.35;cursor:not-allowed}
+        .date-current{min-width:110px;padding:0 10px;font-weight:700;cursor:pointer}
+        .date-current:hover{background:#edf3ff;border-color:#c8d9ff;color:var(--te-blue)}
+        .auto-select{padding:0 8px;color:var(--te-muted);cursor:pointer}
         .section-title strong{color:var(--te-text);font-size:14px;text-transform:none;letter-spacing:0}
         .section-title>span{font-size:10px}
         .chart-wrap{position:relative;width:100%;height:280px}
@@ -524,10 +636,10 @@ class TauronEnergyCard extends HTMLElement {
         <div class="hero-grid">
           <div class="hero">
             <div class="budget-ring" style="--budget:${budgetPercent}%"><div>${this._fmt(budgetPercent,0)}%<span>dziennego budżetu</span></div></div>
-            <div class="eyebrow">Pobór dzisiaj <span class="eyebrow-dot"></span></div>
+            <div class="eyebrow">Pobór · ${this._dateLabel(this._selectedDate)} <span class="eyebrow-dot"></span></div>
             <div class="big-value">${Number.isFinite(dailyConsumed) ? this._fmt(dailyConsumed,2) : "—"} <small>kWh</small></div>
             <div class="hero-meta">
-              <span><b style="color:#89a9ff">SUMA DZISIAJ</b><strong>${Number.isFinite(dailyConsumed) ? this._fmt(dailyConsumed,2) : "—"} kWh</strong></span>
+              <span><b style="color:#89a9ff">SUMA · ${this._dateLabel(this._selectedDate).toUpperCase()}</b><strong>${Number.isFinite(dailyConsumed) ? this._fmt(dailyConsumed,2) : "—"} kWh</strong></span>
               <span><b style="color:#89a9ff">ŚREDNIA</b><strong>${Number.isFinite(dailyAverage) ? this._fmt(dailyAverage,2) : "—"} kWh/h</strong></span>
             </div>
           </div>
@@ -557,7 +669,18 @@ class TauronEnergyCard extends HTMLElement {
         </div>
 
         <div class="section">
-          <div class="section-title"><div><strong>Zużycie energii</strong><span style="margin-left:8px">ostatnie ${Number(c.days_history || 14)} dni</span></div><span>▦ ${Number(c.days_history || 14)} dni</span></div>
+          <div class="section-title chart-header">
+          <div><strong>Zużycie energii</strong><span style="margin-left:8px">ostatnie ${Number(c.days_history || 14)} dni</span></div>
+          <div class="energy-controls">
+            <button class="date-nav" data-energy-date="-1" title="Poprzedni dzień" aria-label="Poprzedni dzień">‹</button>
+            <button class="date-current" data-energy-today>${this._dateLabel(this._selectedDate)}</button>
+            <button class="date-nav" data-energy-date="1" title="Następny dzień" aria-label="Następny dzień" ${this._dateKey(new Date()) === this._selectedDate ? "disabled" : ""}>›</button>
+            <select class="auto-select" aria-label="Automatyczne odświeżanie danych">
+              <option value="60" ${this._autoRefreshMinutes === 60 ? "selected" : ""}>Auto 60 min</option>
+              <option value="120" ${this._autoRefreshMinutes === 120 ? "selected" : ""}>Auto 120 min</option>
+            </select>
+          </div>
+        </div>
           <div class="chart">${this._chartSvg()}</div>
           <div class="legend"><span><i class="c"></i>Pobór (kWh)</span><span><i class="e"></i>Oddanie (kWh)</span></div>
         </div>
@@ -593,10 +716,22 @@ class TauronEnergyCard extends HTMLElement {
 
         <div class="footer">
           <span>Źródło dzisiaj: /odczyty/api · historia: /energia/api</span>
-          <span>${updated ? "Aktualizacja " + this._date(updated) + " · " + this._relative(updated) : "Brak aktualizacji"}</span>
+          <span>Wybrany dzień: ${this._selectedDate || "—"} · Auto ${this._autoRefreshMinutes} min · ${updated ? "Aktualizacja " + this._date(updated) + " · " + this._relative(updated) : "Brak aktualizacji"}</span>
         </div>
       </section>
     `;
+
+    this.shadowRoot.querySelectorAll("[data-energy-date]").forEach(button => {
+      button.addEventListener("click", () => this._changeDate(Number(button.dataset.energyDate)));
+    });
+
+    const todayButton = this.shadowRoot.querySelector("[data-energy-today]");
+    if (todayButton) todayButton.addEventListener("click", () => this._goToday());
+
+    const autoSelect = this.shadowRoot.querySelector(".auto-select");
+    if (autoSelect) {
+      autoSelect.addEventListener("change", event => this._setAutoRefreshMinutes(event.target.value));
+    }
 
     this.shadowRoot.querySelectorAll(".refresh, .wide-refresh").forEach(button => {
       button.addEventListener("click", () => this._refresh());
