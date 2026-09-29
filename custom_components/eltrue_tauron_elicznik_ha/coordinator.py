@@ -130,15 +130,26 @@ class TauronElicznikCoordinator(DataUpdateCoordinator[TauronCalculatedData]):
         finally:
             await self._client.logout()
 
-        return self._calculate_data(energy_data, fetch_time, period_data)
+        return self._calculate_data(
+            energy_data,
+            fetch_time,
+            period_data,
+            pse_today=pse_today,
+            pse_tomorrow=pse_tomorrow,
+        )
 
     def _calculate_data(
         self,
         energy_data: TauronEnergyData,
         fetch_time: datetime,
         period_data: TauronPeriodEnergyData | None = None,
+        pse_today: list[dict[str, object]] | None = None,
+        pse_tomorrow: list[dict[str, object]] | None = None,
     ) -> TauronCalculatedData:
         """Calculate net-metering values from raw energy data."""
+        pse_today = pse_today or []
+        pse_tomorrow = pse_tomorrow or []
+
         en_pob_increment = energy_data.energia_pobrana - self._prev_energia_pobrana
         en_odd_increment = energy_data.energia_oddana - self._prev_energia_oddana
         en_odd_increment_80 = NET_METERING_RATIO * en_odd_increment
