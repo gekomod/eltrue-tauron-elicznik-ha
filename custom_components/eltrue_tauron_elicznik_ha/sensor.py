@@ -149,7 +149,8 @@ SENSOR_DESCRIPTIONS: tuple[TauronSensorEntityDescription, ...] = (
         native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
         state_class=SensorStateClass.MEASUREMENT,
         value_fn=lambda data: data.srednia_oddana_dzien,
-    ),    TauronSensorEntityDescription(
+    ),
+    TauronSensorEntityDescription(
         key="tariff",
         translation_key="tariff",
         value_fn=lambda data: data.tariff,
@@ -206,27 +207,23 @@ class TauronSensor(CoordinatorEntity[TauronElicznikCoordinator], SensorEntity):
         )
 
     @property
-    def _chart_state_attributes(self) -> dict[str, Any] | None:
-        """Return chart history for the daily consumption sensor."""
-        if self.entity_description.key != "energia_pobrana_dzien":
-            return None
-        if self.coordinator.data is None:
-            return None
-        return {
-            "chart_history": self.coordinator.data.chart_history,
-            "chart_days": len(self.coordinator.data.chart_history),
-            "chart_source": "TAURON /odczyty/api (today) + /energia/api (history)",
-        }
-
-    @property
     def extra_state_attributes(self) -> dict[str, Any] | None:
-        """Return useful PSE/tariff details."""
+        """Return additional chart, tariff and PSE details."""
         if self.coordinator.data is None:
             return None
 
         key = self.entity_description.key
+
+        if key == "energia_pobrana_dzien":
+            return {
+                "chart_history": self.coordinator.data.chart_history,
+                "chart_days": len(self.coordinator.data.chart_history),
+                "chart_source": "TAURON /odczyty/api (today) + /energia/api (history)",
+            }
+
         if key == "tariff":
             return {"source": "TAURON /energia/api"}
+
         if key in {"pse_today", "pse_tomorrow"}:
             values = (
                 self.coordinator.data.pse_today
@@ -238,6 +235,7 @@ class TauronSensor(CoordinatorEntity[TauronElicznikCoordinator], SensorEntity):
                 "hours": values,
                 "hours_count": len(values),
             }
+
         return None
 
     @property
