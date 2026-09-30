@@ -582,6 +582,15 @@ class TauronApiClient:
             "s3": parse_zone(latest_record, "S3"),
         }
 
+        # The eLicznik portal presents the meter total as T1 + T2 + T3.
+        # Use the tariff registers when they are available, falling back to
+        # the legacy C field for meters without zone registers.
+        zone_values = [
+            value for value in latest_zones.values() if value is not None
+        ]
+        if zone_values:
+            counter_value = round(sum(zone_values), 3)
+
         records: list[tuple[datetime, float, float | None, float | None, float | None]] = []
         for record in records_raw:
             try:
@@ -640,6 +649,9 @@ class TauronApiClient:
             previous_records = [item for item in records if item[0] < first_time]
             baseline = previous_records[-1][1] if previous_records else first_counter
             daily_value = round(max(0.0, last_counter - baseline), 3)
+
+            if all(value is not None for value in daily_zones):
+                daily_value = round(sum(value for value in daily_zones if value is not None), 3)
 
         _LOGGER.debug(
             "Tauron %s latest registers: S1=%s S2=%s S3=%s; daily=%s/%s/%s",
