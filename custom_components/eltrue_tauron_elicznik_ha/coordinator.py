@@ -123,8 +123,18 @@ class TauronElicznikCoordinator(DataUpdateCoordinator[TauronCalculatedData]):
                 pse_tomorrow = await self._client.fetch_pse_peak_hours(
                     dt_util.now().date() + timedelta(days=1)
                 )
-            except TauronApiError as err:
-                _LOGGER.warning("PSE Energetyczny Kompas unavailable: %s", err)
+                _LOGGER.warning(
+                    "PSE Energetyczny Kompas: pobrano dzisiaj=%d, jutro=%d rekordow",
+                    len(pse_today),
+                    len(pse_tomorrow),
+                )
+            except Exception as err:
+                _LOGGER.warning(
+                    "PSE Energetyczny Kompas unavailable: %s: %s",
+                    type(err).__name__,
+                    err,
+                    exc_info=True,
+                )
         except TauronApiError as err:
             raise UpdateFailed(f"Error fetching Tauron data: {err}") from err
         finally:
