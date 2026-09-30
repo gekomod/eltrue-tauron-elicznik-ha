@@ -460,13 +460,21 @@ class TauronApiClient:
         if not numeric_values:
             raise TauronApiError("Tauron chart API returned an empty values[] array")
 
-        average_raw = payload.get("average")
+        average_raw = payload.get("average", data.get("average"))
         try:
             average = float(average_raw) if average_raw is not None else None
         except (TypeError, ValueError):
             average = None
 
-        return round(sum(numeric_values), 3), average
+        total = round(sum(numeric_values), 3)
+
+        # Some Tauron responses omit the explicit average even though the
+        # website displays it. Reconstruct the hourly average from values[]
+        # so Home Assistant matches the portal (e.g. 12.8 kWh / 24 h = 0.533).
+        if average is None and numeric_values:
+            average = round(total / len(numeric_values), 3)
+
+        return total, average
 
     async def _fetch_energy_type(
         self, from_str: str, to_str: str, energy_type: str
