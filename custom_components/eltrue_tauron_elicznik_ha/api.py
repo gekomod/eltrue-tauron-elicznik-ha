@@ -320,18 +320,22 @@ class TauronApiClient:
     async def fetch_pse_peak_hours(
         self, target_date: date | None = None
     ) -> list[dict[str, Any]]:
-        """Fetch active PSE Energetyczny Kompas records for one day."""
+        """Fetch PSE Energetyczny Kompas data for one business day.
+
+        PSE returns multiple revisions per hour. We therefore fetch the
+        complete day and keep only records marked is_active=true locally.
+        The endpoint is paginated via nextLink.
+        """
         if target_date is None:
             target_date = dt_util.now().date()
 
         date_str = target_date.isoformat()
         url = "https://api.raporty.pse.pl/api/pdgsz"
-        params = {
+        params: dict[str, str] | None = {
             "$select": "business_date,dtime,is_active,usage_fcst",
-            "$filter": (
-                f"business_date eq '{date_str}' and is_active eq true"
-            ),
-            "$first": "50",
+            "$filter": f"business_date eq '{date_str}'",
+            "$orderby": "dtime",
+            "$first": "100",
         }
         headers = {"Accept": "application/json"}
 
@@ -342,22 +346,67 @@ class TauronApiClient:
             3: "Wymagane ograniczenie",
         }
 
+        active_by_hour: dict[str, dict[str, Any]] = {}
+
         try:
-            async with self._session.get(
-                url, params=params, headers=headers
-            ) as response:
-                _LOGGER.info(
-                    "PSE Energetyczny Kompas: pobieranie %s (HTTP %s)",
-                    date_str,
-                    response.status,
-                )
-                if response.status != 200:
-                    body = await response.text()
-                    raise TauronApiError(
-                        f"PSE PDGSZ request failed with status {response.status}: "
-                        f"{body[:300]}"
+            page = 0
+            while url:
+                page += 1
+                async with self._session.get(
+                    url, params=params, headers=headers
+                ) as response:
+                    _LOGGER.info(
+                        "PSE Energetyczny Kompas: %s — strona %d, HTTP %s",
+                        date_str,
+                        page,
+                        response.status,
                     )
-                data = await response.json(content_type=None)
+                    if response.status != 200:
+                        body = await response.text()
+                        raise TauronApiError(
+                            f"PSE PDGSZ request failed with status {response.status}: "
+                            f"{body[:300]}"
+                        )
+                    data = await response.json(content_type=None)
+
+                values = data.get("value", []) if isinstance(data, dict) else []
+                if not isinstance(values, list):
+                    values = []
+
+                for item in values:
+                    if not isinstance(item, dict):
+                        continue
+
+                    if str(item.get("business_date") or "") != date_str:
+                        continue
+                    if item.get("is_active") is not True:
+                        continue
+
+                    dtime = item.get("dtime")
+                    usage = item.get("usage_fcst")
+                    if dtime is None or usage is None:
+                        continue
+
+                    try:
+                        usage_int = int(usage)
+                    except (TypeError, ValueError):
+                        continue
+
+                    dtime_str = str(dtime)
+                    active_by_hour[dtime_str] = {
+                        "dtime": dtime_str,
+                        "usage_fcst": usage_int,
+                        "state": status_map.get(
+                            usage_int, "Nieznany status"
+                        ),
+                        "business_date": date_str,
+                        "is_active": True,
+                    }
+
+                next_link = data.get("nextLink") if isinstance(data, dict) else None
+                url = str(next_link) if next_link else ""
+                params = None
+
         except TauronApiError:
             raise
         except Exception as err:
@@ -365,39 +414,12 @@ class TauronApiClient:
                 f"Failed to fetch PSE Energetyczny Kompas: {err}"
             ) from err
 
-        values = data.get("value", []) if isinstance(data, dict) else []
-        if not isinstance(values, list):
-            values = []
-
-        result: list[dict[str, Any]] = []
-        for item in values:
-            if not isinstance(item, dict):
-                continue
-            business_date = str(item.get("business_date") or "")
-            if business_date != date_str:
-                continue
-
-            dtime = item.get("dtime")
-            usage = item.get("usage_fcst")
-            if dtime is None or usage is None:
-                continue
-
-            try:
-                usage_int = int(usage)
-            except (TypeError, ValueError):
-                continue
-
-            result.append({
-                "dtime": str(dtime),
-                "usage_fcst": usage_int,
-                "state": status_map.get(usage_int, "Nieznany status"),
-                "business_date": business_date,
-                "is_active": bool(item.get("is_active")),
-            })
-
-        result.sort(key=lambda item: str(item.get("dtime", "")))
+        result = sorted(
+            active_by_hour.values(),
+            key=lambda item: str(item.get("dtime", "")),
+        )
         _LOGGER.info(
-            "PSE Energetyczny Kompas: %s — %d aktywnych godzin",
+            "PSE Energetyczny Kompas: %s — znaleziono %d aktywnych godzin",
             date_str,
             len(result),
         )
