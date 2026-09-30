@@ -47,6 +47,12 @@
       "energia_oddana_dzien": {"name": "Daily exported energy (chart API)"},
       "srednia_pobrana_dzien": {"name": "Daily consumption average"},
       "srednia_oddana_dzien": {"name": "Daily export average"},
+      "t1": {"name": "T1 meter register"},
+      "t2": {"name": "T2 meter register"},
+      "t3": {"name": "T3 meter register"},
+      "t1_dzisiaj": {"name": "T1 today"},
+      "t2_dzisiaj": {"name": "T2 today"},
+      "t3_dzisiaj": {"name": "T3 today"},
       "tariff": {"name": "Tariff"},
       "pse_today": {"name": "Energetyczny Kompas — today"},
       "pse_tomorrow": {"name": "Energetyczny Kompas — tomorrow"}
