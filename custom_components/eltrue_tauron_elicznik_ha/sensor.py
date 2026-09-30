@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from dataclasses import dataclass
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from typing import Any
 
 from homeassistant.components.sensor import (
@@ -166,7 +166,7 @@ SENSOR_DESCRIPTIONS: tuple[TauronSensorEntityDescription, ...] = (
     TauronSensorEntityDescription(
         key="pse_tomorrow",
         translation_key="pse_tomorrow",
-        value_fn=lambda data: _pse_current_state(data.pse_tomorrow, dt_util.now().date() + __import__("datetime").timedelta(days=1)),
+        value_fn=lambda data: _pse_current_state(data.pse_tomorrow, dt_util.now().date() + timedelta(days=1)),
     ),
 )
 
