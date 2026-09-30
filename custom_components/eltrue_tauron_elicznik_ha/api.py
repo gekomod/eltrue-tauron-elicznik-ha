@@ -179,9 +179,12 @@ class TauronApiClient:
     async def fetch_energy_data(self, query_date: date | None = None) -> TauronEnergyData:
         """Fetch lifetime consumption and generation counters."""
         if query_date is None:
-            query_date = date.today()
+            query_date = dt_util.now().date()
 
-        from_date = query_date - timedelta(days=7)
+        # The Tauron energy.js page requests a 30-day window for /odczyty/api.
+        # Use the same window so we have the same current register context and
+        # a reliable previous reading for daily deltas.
+        from_date = query_date - timedelta(days=30)
         from_str = from_date.strftime("%d.%m.%Y")
         to_str = query_date.strftime("%d.%m.%Y")
 
@@ -557,15 +560,9 @@ class TauronApiClient:
                 "daily_s3": None,
             }
 
-        try:
-            records_raw = data["data"]
-            latest_record = records_raw[-1]
-            counter_value = float(latest_record["C"])
-            reading_date = datetime.strptime(
-                latest_record["Date"], "%d.%m.%Y %H:%M:%S"
-            )
-        except (KeyError, IndexError, TypeError, ValueError) as err:
-            raise TauronApiError(f"Invalid API response format: {err}") from err
+        records_raw = data.get("data")
+        if not isinstance(records_raw, list) or not records_raw:
+            raise TauronApiError("Invalid API response format: data is not a non-empty list")
 
         def parse_zone(record: dict[str, Any], key: str) -> float | None:
             value = record.get(key)
@@ -576,41 +573,45 @@ class TauronApiClient:
             except (TypeError, ValueError):
                 return None
 
-        latest_zones = {
-            "s1": parse_zone(latest_record, "S1"),
-            "s2": parse_zone(latest_record, "S2"),
-            "s3": parse_zone(latest_record, "S3"),
-        }
-
-        # The eLicznik portal presents the meter total as T1 + T2 + T3.
-        # Use the tariff registers when they are available, falling back to
-        # the legacy C field for meters without zone registers.
-        zone_values = [
-            value for value in latest_zones.values() if value is not None
-        ]
-        if zone_values:
-            counter_value = round(sum(zone_values), 3)
-
         records: list[tuple[datetime, float, float | None, float | None, float | None]] = []
+        record_objects: list[tuple[datetime, dict[str, Any]]] = []
         for record in records_raw:
+            if not isinstance(record, dict):
+                continue
             try:
                 record_date = datetime.strptime(
                     str(record["Date"]), "%d.%m.%Y %H:%M:%S"
                 )
                 record_counter = float(record["C"])
-                records.append(
-                    (
-                        record_date,
-                        record_counter,
-                        parse_zone(record, "S1"),
-                        parse_zone(record, "S2"),
-                        parse_zone(record, "S3"),
-                    )
-                )
             except (KeyError, TypeError, ValueError):
                 continue
 
+            parsed = (
+                record_date,
+                record_counter,
+                parse_zone(record, "S1"),
+                parse_zone(record, "S2"),
+                parse_zone(record, "S3"),
+            )
+            records.append(parsed)
+            record_objects.append((record_date, record))
+
+        if not records:
+            raise TauronApiError("Invalid API response format: no valid meter records")
+
+        # Do not rely on the server's array order. The portal means the most
+        # recent reading, so select the record with the newest Date explicitly.
         records.sort(key=lambda item: item[0])
+        record_objects.sort(key=lambda item: item[0])
+        latest_date, latest_record = record_objects[-1]
+        latest_tuple = records[-1]
+        counter_value = latest_tuple[1]  # C = the lifetime meter counter
+        reading_date = latest_date
+        latest_zones = {
+            "s1": latest_tuple[2],
+            "s2": latest_tuple[3],
+            "s3": latest_tuple[4],
+        }
         today_records = [
             item for item in records if item[0].date() == reading_date.date()
         ]
@@ -654,8 +655,10 @@ class TauronApiClient:
                 daily_value = round(sum(value for value in daily_zones if value is not None), 3)
 
         _LOGGER.debug(
-            "Tauron %s latest registers: S1=%s S2=%s S3=%s; daily=%s/%s/%s",
+            "Tauron %s latest reading: date=%s C=%s S1=%s S2=%s S3=%s; daily=%s/%s/%s",
             energy_type,
+            reading_date,
+            counter_value,
             latest_zones["s1"],
             latest_zones["s2"],
             latest_zones["s3"],
