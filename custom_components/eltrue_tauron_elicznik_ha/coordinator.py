@@ -54,6 +54,12 @@ class TauronCalculatedData:
     energia_oddana_dzien: float | None
     srednia_pobrana_dzien: float | None
     srednia_oddana_dzien: float | None
+    t1: float | None
+    t2: float | None
+    t3: float | None
+    t1_dzisiaj: float | None
+    t2_dzisiaj: float | None
+    t3_dzisiaj: float | None
     chart_history: list[dict[str, object]]
     tariff: str | None
     pse_today: list[dict[str, object]]
@@ -222,6 +228,12 @@ class TauronElicznikCoordinator(DataUpdateCoordinator[TauronCalculatedData]):
             srednia_oddana_dzien=(
                 period_data.srednia_oddana if period_data else None
             ),
+            t1=energy_data.t1,
+            t2=energy_data.t2,
+            t3=energy_data.t3,
+            t1_dzisiaj=energy_data.t1_dzisiaj,
+            t2_dzisiaj=energy_data.t2_dzisiaj,
+            t3_dzisiaj=energy_data.t3_dzisiaj,
             chart_history=chart_history,
             tariff=period_data.tariff if period_data else None,
             pse_today=pse_today,
