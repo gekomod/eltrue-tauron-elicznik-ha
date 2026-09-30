@@ -41,6 +41,12 @@
       "energia_oddana_dzien": {"name": "Dzienne oddanie energii (chart API)"},
       "srednia_pobrana_dzien": {"name": "Średnie zużycie dzienne"},
       "srednia_oddana_dzien": {"name": "Średnie oddanie dzienne"},
+      "t1": {"name": "T1 licznik"},
+      "t2": {"name": "T2 licznik"},
+      "t3": {"name": "T3 licznik"},
+      "t1_dzisiaj": {"name": "T1 dzisiaj"},
+      "t2_dzisiaj": {"name": "T2 dzisiaj"},
+      "t3_dzisiaj": {"name": "T3 dzisiaj"},
       "tariff": {"name": "Taryfa"},
       "pse_today": {"name": "Energetyczny Kompas — dzisiaj"},
       "pse_tomorrow": {"name": "Energetyczny Kompas — jutro"}
