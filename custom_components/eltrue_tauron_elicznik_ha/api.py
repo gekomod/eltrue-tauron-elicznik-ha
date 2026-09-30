@@ -40,6 +40,12 @@ class TauronEnergyData:
     reading_date: datetime
     energia_pobrana_dzisiaj: float | None
     energia_oddana_dzisiaj: float | None
+    t1: float | None
+    t2: float | None
+    t3: float | None
+    t1_dzisiaj: float | None
+    t2_dzisiaj: float | None
+    t3_dzisiaj: float | None
     success: bool
 
 
@@ -192,6 +198,12 @@ class TauronApiClient:
             energia_oddana=energia_oddana["counter"],
             energia_pobrana_dzisiaj=energia_pobrana.get("daily"),
             energia_oddana_dzisiaj=energia_oddana.get("daily"),
+            t1=energia_pobrana.get("s1"),
+            t2=energia_pobrana.get("s2"),
+            t3=energia_pobrana.get("s3"),
+            t1_dzisiaj=energia_pobrana.get("daily_s1"),
+            t2_dzisiaj=energia_pobrana.get("daily_s2"),
+            t3_dzisiaj=energia_pobrana.get("daily_s3"),
             reading_date=reading_date,
             success=energia_pobrana["success"] and energia_oddana["success"],
         )
@@ -526,17 +538,28 @@ class TauronApiClient:
     async def _fetch_energy_type(
         self, from_str: str, to_str: str, energy_type: str
     ) -> dict[str, Any]:
-        """Fetch a specific lifetime counter from the readings API."""
+        """Fetch a meter counter and tariff-zone registers."""
         payload = {"from": from_str, "to": to_str, "type": energy_type}
 
         data = await self._make_api_request(URL_API, payload, energy_type)
 
         if not data.get("success") or not data.get("data"):
             _LOGGER.warning("API returned no data for %s", energy_type)
-            return {"success": False, "counter": 0.0}
+            return {
+                "success": False,
+                "counter": 0.0,
+                "s1": None,
+                "s2": None,
+                "s3": None,
+                "daily": None,
+                "daily_s1": None,
+                "daily_s2": None,
+                "daily_s3": None,
+            }
 
         try:
-            latest_record = data["data"][-1]
+            records_raw = data["data"]
+            latest_record = records_raw[-1]
             counter_value = float(latest_record["C"])
             reading_date = datetime.strptime(
                 latest_record["Date"], "%d.%m.%Y %H:%M:%S"
@@ -544,14 +567,37 @@ class TauronApiClient:
         except (KeyError, IndexError, TypeError, ValueError) as err:
             raise TauronApiError(f"Invalid API response format: {err}") from err
 
-        records = []
-        for record in data["data"]:
+        def parse_zone(record: dict[str, Any], key: str) -> float | None:
+            value = record.get(key)
+            if value is None or str(value).strip() == "":
+                return None
+            try:
+                return float(value)
+            except (TypeError, ValueError):
+                return None
+
+        latest_zones = {
+            "s1": parse_zone(latest_record, "S1"),
+            "s2": parse_zone(latest_record, "S2"),
+            "s3": parse_zone(latest_record, "S3"),
+        }
+
+        records: list[tuple[datetime, float, float | None, float | None, float | None]] = []
+        for record in records_raw:
             try:
                 record_date = datetime.strptime(
                     str(record["Date"]), "%d.%m.%Y %H:%M:%S"
                 )
                 record_counter = float(record["C"])
-                records.append((record_date, record_counter))
+                records.append(
+                    (
+                        record_date,
+                        record_counter,
+                        parse_zone(record, "S1"),
+                        parse_zone(record, "S2"),
+                        parse_zone(record, "S3"),
+                    )
+                )
             except (KeyError, TypeError, ValueError):
                 continue
 
@@ -559,28 +605,64 @@ class TauronApiClient:
         today_records = [
             item for item in records if item[0].date() == reading_date.date()
         ]
+
+        def daily_delta(zone_index: int) -> float | None:
+            """Calculate today's increment for one tariff register."""
+            if not today_records:
+                return None
+
+            today_with_zone = [
+                item for item in today_records if item[2 + zone_index] is not None
+            ]
+            if not today_with_zone:
+                return None
+
+            first = today_with_zone[0]
+            last = today_with_zone[-1]
+            previous = [
+                item for item in records
+                if item[0] < first[0] and item[2 + zone_index] is not None
+            ]
+            baseline = previous[-1][2 + zone_index] if previous else first[2 + zone_index]
+            if baseline is None or last[2 + zone_index] is None:
+                return None
+            return round(max(0.0, last[2 + zone_index] - baseline), 3)
+
+        daily_zones = [
+            daily_delta(0),
+            daily_delta(1),
+            daily_delta(2),
+        ]
         daily_value = None
         if today_records:
-            first_time, first_counter = today_records[0]
-            last_time, last_counter = today_records[-1]
-            previous_records = [
-                item for item in records if item[0] < first_time
-            ]
+            first_time, first_counter, *_ = today_records[0]
+            last_time, last_counter, *_ = today_records[-1]
+            previous_records = [item for item in records if item[0] < first_time]
             baseline = previous_records[-1][1] if previous_records else first_counter
             daily_value = round(max(0.0, last_counter - baseline), 3)
-            _LOGGER.debug(
-                "Tauron current-day %s: %s -> %s = %.3f kWh",
-                reading_date.date(),
-                first_time,
-                last_time,
-                daily_value,
-            )
+
+        _LOGGER.debug(
+            "Tauron %s latest registers: S1=%s S2=%s S3=%s; daily=%s/%s/%s",
+            energy_type,
+            latest_zones["s1"],
+            latest_zones["s2"],
+            latest_zones["s3"],
+            daily_zones[0],
+            daily_zones[1],
+            daily_zones[2],
+        )
 
         return {
             "success": True,
             "counter": counter_value,
             "date": reading_date,
             "daily": daily_value,
+            "s1": latest_zones["s1"],
+            "s2": latest_zones["s2"],
+            "s3": latest_zones["s3"],
+            "daily_s1": daily_zones[0],
+            "daily_s2": daily_zones[1],
+            "daily_s3": daily_zones[2],
         }
 
     async def _make_api_request(
