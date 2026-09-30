@@ -34,23 +34,23 @@ class TauronSensorEntityDescription(SensorEntityDescription):
     value_fn: Callable[[TauronCalculatedData], Any]
 
 
-def _pse_current_state(values: list[dict[str, Any]]) -> str | None:
-    """Return the PSE recommendation for the current local hour."""
+def _pse_current_state(
+    values: list[dict[str, Any]], target_date: date
+) -> str | None:
+    """Return the PSE recommendation for the current hour on target_date."""
     if not values:
         return None
 
     current_hour = dt_util.now().hour
-    prefix = dt_util.now().date().isoformat() + " "
-    current_prefix = f"{prefix}{current_hour:02d}:"
+    prefix = f"{target_date.isoformat()} {current_hour:02d}:"
 
     for item in values:
         dtime = str(item.get("dtime", ""))
-        if dtime.startswith(current_prefix):
+        if dtime.startswith(prefix):
             state = item.get("state")
             return str(state) if state is not None else None
 
     return None
-
 
 SENSOR_DESCRIPTIONS: tuple[TauronSensorEntityDescription, ...] = (
     TauronSensorEntityDescription(
@@ -161,12 +161,12 @@ SENSOR_DESCRIPTIONS: tuple[TauronSensorEntityDescription, ...] = (
     TauronSensorEntityDescription(
         key="pse_today",
         translation_key="pse_today",
-        value_fn=lambda data: _pse_current_state(data.pse_today),
+        value_fn=lambda data: _pse_current_state(data.pse_today, dt_util.now().date()),
     ),
     TauronSensorEntityDescription(
         key="pse_tomorrow",
         translation_key="pse_tomorrow",
-        value_fn=lambda data: _pse_current_state(data.pse_tomorrow),
+        value_fn=lambda data: _pse_current_state(data.pse_tomorrow, dt_util.now().date() + __import__("datetime").timedelta(days=1)),
     ),
 )
 
