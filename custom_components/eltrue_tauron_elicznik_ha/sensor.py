@@ -18,6 +18,7 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.device_registry import DeviceEntryType, DeviceInfo
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
+from homeassistant.util import dt as dt_util
 
 from . import TauronElicznikConfigEntry
 from .const import DOMAIN
@@ -34,19 +35,21 @@ class TauronSensorEntityDescription(SensorEntityDescription):
 
 
 def _pse_current_state(values: list[dict[str, Any]]) -> str | None:
-    """Return the latest active PSE recommendation."""
-    active = [item for item in values if item.get("is_active", True)]
-    if not active:
-        active = values
-    if not active:
+    """Return the PSE recommendation for the current local hour."""
+    if not values:
         return None
 
-    def sort_key(item: dict[str, Any]) -> str:
-        return str(item.get("dtime", ""))
+    current_hour = dt_util.now().hour
+    prefix = dt_util.now().date().isoformat() + " "
+    current_prefix = f"{prefix}{current_hour:02d}:"
 
-    latest = sorted(active, key=sort_key)[-1]
-    state = latest.get("state")
-    return str(state) if state is not None else None
+    for item in values:
+        dtime = str(item.get("dtime", ""))
+        if dtime.startswith(current_prefix):
+            state = item.get("state")
+            return str(state) if state is not None else None
+
+    return None
 
 
 SENSOR_DESCRIPTIONS: tuple[TauronSensorEntityDescription, ...] = (
