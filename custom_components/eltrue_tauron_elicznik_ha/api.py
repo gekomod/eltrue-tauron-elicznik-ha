@@ -346,7 +346,6 @@ class TauronApiClient:
             async with self._session.get(
                 url, params=params, headers=headers
             ) as response:
-                request_url = str(response.url)
                 _LOGGER.info(
                     "PSE Energetyczny Kompas: pobieranie %s (HTTP %s)",
                     date_str,
