@@ -197,7 +197,7 @@ def test_url_api():
 # ── sensor descriptions ───────────────────────────────────────────────────────
 
 def test_sensor_descriptions_count():
-    assert len(_sensor.SENSOR_DESCRIPTIONS) == 14
+    assert len(_sensor.SENSOR_DESCRIPTIONS) == 23
 
 
 def test_sensor_keys_present():
@@ -214,9 +214,18 @@ def test_sensor_keys_present():
         "energia_oddana_start",
         "last_fetch_time",
         "energia_pobrana_dzien",
+        "t1",
+        "t2",
+        "t3",
+        "t1_dzisiaj",
+        "t2_dzisiaj",
+        "t3_dzisiaj",
         "energia_oddana_dzien",
         "srednia_pobrana_dzien",
         "srednia_oddana_dzien",
+        "tariff",
+        "pse_today",
+        "pse_tomorrow",
     }
 
 
@@ -294,6 +303,14 @@ def _energy_data(pobrana: float, oddana: float, reading_dt: datetime | None = No
         energia_pobrana=pobrana,
         energia_oddana=oddana,
         reading_date=reading_dt or datetime(2026, 1, 9, 23, 59, 59),
+        energia_pobrana_dzisiaj=None,
+        energia_oddana_dzisiaj=None,
+        t1=None,
+        t2=None,
+        t3=None,
+        t1_dzisiaj=None,
+        t2_dzisiaj=None,
+        t3_dzisiaj=None,
         success=True,
     )
 
@@ -432,6 +449,14 @@ def test_tauron_energy_data_dataclass():
         energia_pobrana=28969.0,
         energia_oddana=15000.0,
         reading_date=reading,
+        energia_pobrana_dzisiaj=None,
+        energia_oddana_dzisiaj=None,
+        t1=None,
+        t2=None,
+        t3=None,
+        t1_dzisiaj=None,
+        t2_dzisiaj=None,
+        t3_dzisiaj=None,
         success=True,
     )
     assert data.energia_pobrana == 28969.0
