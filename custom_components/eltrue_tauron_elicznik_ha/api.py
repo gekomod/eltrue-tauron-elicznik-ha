@@ -320,23 +320,34 @@ class TauronApiClient:
     async def fetch_pse_peak_hours(
         self, target_date: date | None = None
     ) -> list[dict[str, Any]]:
-        """Fetch PSE Energetyczny Kompas data for the requested business day."""
+        """Fetch PSE Energetyczny Kompas (PDGSZ) for one business day."""
         if target_date is None:
             target_date = dt_util.now().date()
 
         date_str = target_date.isoformat()
-        url = (
-            "https://api.raporty.pse.pl/api/pdgsz"
-            "?$filter=business_date%20eq%20'"
-            f"{date_str}'"
-            "&$orderby=dtime"
-        )
+        url = "https://api.raporty.pse.pl/api/pdgsz"
+        params = {
+            "$select": "business_date,dtime,is_active,usage_fcst",
+            "$filter": f"business_date ge '{date_str}'",
+            "$first": "200",
+        }
+        headers = {"Accept": "application/json"}
 
         try:
-            async with self._session.get(url) as response:
+            async with self._session.get(
+                url, params=params, headers=headers
+            ) as response:
+                _LOGGER.debug(
+                    "PSE PDGSZ request: url=%s status=%s params=%s",
+                    response.url,
+                    response.status,
+                    params,
+                )
                 if response.status != 200:
+                    body = await response.text()
                     raise TauronApiError(
-                        f"PSE PDGSZ request failed with status {response.status}"
+                        f"PSE PDGSZ request failed with status {response.status}: "
+                        f"{body[:300]}"
                     )
                 data = await response.json(content_type=None)
         except TauronApiError:
@@ -361,21 +372,38 @@ class TauronApiClient:
         for item in values:
             if not isinstance(item, dict):
                 continue
-            dtime = item.get("dtime") or item.get("dtime_utc")
+
+            business_date = str(item.get("business_date") or "")
+            if business_date != date_str:
+                continue
+
+            dtime = item.get("dtime")
             usage = item.get("usage_fcst")
             if dtime is None or usage is None:
                 continue
+
+            if item.get("is_active") is False:
+                continue
+
             try:
                 usage_int = int(usage)
             except (TypeError, ValueError):
                 continue
+
             result.append({
                 "dtime": str(dtime),
                 "usage_fcst": usage_int,
                 "state": status_map.get(usage_int, "Nieznany status"),
-                "business_date": str(item.get("business_date") or date_str),
-                "is_active": bool(item.get("is_active", True)),
+                "business_date": business_date,
+                "is_active": True,
             })
+
+        result.sort(key=lambda item: str(item.get("dtime", "")))
+        _LOGGER.debug(
+            "PSE PDGSZ returned %d active records for %s",
+            len(result),
+            date_str,
+        )
         return result
 
     async def _fetch_chart_history(
