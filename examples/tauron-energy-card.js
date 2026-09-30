@@ -17,6 +17,12 @@ class TauronEnergyCard extends HTMLElement {
       last_fetch_entity: "sensor.serwerownia_tauron_elicznik_ostatnie_pobranie_danych",
       refresh_entity: "button.tauron_elicznik_odswiez_dane",
       tariff_entity: "sensor.serwerownia_tauron_elicznik_taryfa",
+      t1_entity: "sensor.serwerownia_tauron_elicznik_t1_licznik",
+      t2_entity: "sensor.serwerownia_tauron_elicznik_t2_licznik",
+      t3_entity: "sensor.serwerownia_tauron_elicznik_t3_licznik",
+      t1_daily_entity: "sensor.serwerownia_tauron_elicznik_t1_dzisiaj",
+      t2_daily_entity: "sensor.serwerownia_tauron_elicznik_t2_dzisiaj",
+      t3_daily_entity: "sensor.serwerownia_tauron_elicznik_t3_dzisiaj",
       pse_today_entity: "sensor.serwerownia_tauron_elicznik_energetyczny_kompas_dzisiaj",
       pse_tomorrow_entity: "sensor.serwerownia_tauron_elicznik_energetyczny_kompas_jutro",
       title: "Energia",
@@ -500,6 +506,12 @@ class TauronEnergyCard extends HTMLElement {
     const dailyConsumed = this._todayDailyConsumed();
     const dailyExported = this._num(c.daily_exported_entity, NaN);
     const dailyAverage = this._num(c.daily_average_entity, NaN);
+    const t1 = this._num(c.t1_entity, NaN);
+    const t2 = this._num(c.t2_entity, NaN);
+    const t3 = this._num(c.t3_entity, NaN);
+    const t1Daily = this._num(c.t1_daily_entity, NaN);
+    const t2Daily = this._num(c.t2_daily_entity, NaN);
+    const t3Daily = this._num(c.t3_daily_entity, NaN);
     const balance = this._num(c.balance_entity);
     const dailyBudget = this._num(c.daily_budget_entity, NaN);
     const monthlyBudget = this._num(c.monthly_budget_entity, NaN);
@@ -624,6 +636,13 @@ class TauronEnergyCard extends HTMLElement {
         .context-head p{margin:4px 0 0;color:var(--te-muted);font-size:10px}
         .tariff-pill{border:1px solid #dce6f3;background:#f7faff;border-radius:12px;padding:9px 12px;color:var(--te-muted);font-size:9px}
         .tariff-pill span{margin-right:6px}.tariff-pill strong{font-size:18px;color:var(--te-blue)}
+        .zones-panel{margin-top:12px;padding:13px 15px;border:1px solid #e5eaf2;border-radius:13px;background:#fbfcfe}
+        .zones-head{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:10px}
+        .zones-head b{font-size:11px;color:var(--te-text)}.zones-head span{font-size:9px;color:var(--te-muted)}
+        .zones-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:9px}
+        .zone-box{padding:10px;border-radius:10px;background:#fff;border:1px solid #edf0f5}
+        .zone-box small{display:block;color:var(--te-muted);font-size:8px}.zone-box strong{display:block;margin-top:3px;font-size:16px;color:var(--te-text)}
+        .zone-box em{display:block;margin-top:2px;font-size:8px;color:var(--te-muted);font-style:normal}
         .pse-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
         .pse-card{padding:13px;border:1px solid #e5eaf2;border-radius:13px;background:#fbfcfe}
         .pse-card-head{display:flex;justify-content:space-between;gap:10px;align-items:flex-start}
@@ -729,6 +748,18 @@ class TauronEnergyCard extends HTMLElement {
             <div class="progress"><div style="width:${daysPercent}%"></div></div>
             <div class="balance-small ${balanceClass}">${this._fmt(balance,1)} kWh</div>
             <div style="color:var(--te-muted);font-size:11px">Bilans okresu</div>
+          </div>
+        </div>
+
+        <div class="zones-panel">
+          <div class="zones-head">
+            <b>Strefy taryfowe</b>
+            <span>${this._escape(this._state(c.tariff_entity)?.state || "—")}</span>
+          </div>
+          <div class="zones-grid">
+            <div class="zone-box"><small>T1 · licznik</small><strong>${Number.isFinite(t1) ? this._fmt(t1,0) : "—"} kWh</strong><em>Dzisiaj: ${Number.isFinite(t1Daily) ? this._fmt(t1Daily,1) : "—"} kWh</em></div>
+            <div class="zone-box"><small>T2 · licznik</small><strong>${Number.isFinite(t2) ? this._fmt(t2,0) : "—"} kWh</strong><em>Dzisiaj: ${Number.isFinite(t2Daily) ? this._fmt(t2Daily,1) : "—"} kWh</em></div>
+            <div class="zone-box"><small>T3 · licznik</small><strong>${Number.isFinite(t3) ? this._fmt(t3,0) : "—"} kWh</strong><em>Dzisiaj: ${Number.isFinite(t3Daily) ? this._fmt(t3Daily,1) : "—"} kWh</em></div>
           </div>
         </div>
 
