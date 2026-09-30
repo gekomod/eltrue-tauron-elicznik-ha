@@ -17,8 +17,8 @@ class TauronEnergyCard extends HTMLElement {
       last_fetch_entity: "sensor.serwerownia_tauron_elicznik_ostatnie_pobranie_danych",
       refresh_entity: "button.tauron_elicznik_odswiez_dane",
       tariff_entity: "sensor.serwerownia_tauron_elicznik_taryfa",
-      pse_today_entity: "sensor.serwerownia_tauron_elicznik_pse_today",
-      pse_tomorrow_entity: "sensor.serwerownia_tauron_elicznik_pse_tomorrow",
+      pse_today_entity: "sensor.serwerownia_tauron_elicznik_energetyczny_kompas_dzisiaj",
+      pse_tomorrow_entity: "sensor.serwerownia_tauron_elicznik_energetyczny_kompas_jutro",
       title: "Energia",
       days_history: 14,
       auto_refresh_minutes: 60
@@ -165,7 +165,19 @@ class TauronEnergyCard extends HTMLElement {
   }
 
   _state(entity) {
-    return entity && this._hass?.states?.[entity];
+    if (!entity || !this._hass?.states) return undefined;
+    if (this._hass.states[entity]) return this._hass.states[entity];
+
+    // Backward compatibility with the temporary entity ids used before
+    // Home Assistant generated ids from the translated names.
+    const aliases = {
+      "sensor.serwerownia_tauron_elicznik_pse_today":
+        "sensor.serwerownia_tauron_elicznik_energetyczny_kompas_dzisiaj",
+      "sensor.serwerownia_tauron_elicznik_pse_tomorrow":
+        "sensor.serwerownia_tauron_elicznik_energetyczny_kompas_jutro",
+    };
+    const resolved = aliases[entity];
+    return resolved ? this._hass.states[resolved] : undefined;
   }
 
   _num(entity, fallback = 0) {
