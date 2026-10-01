@@ -636,13 +636,25 @@ class TauronEnergyCard extends HTMLElement {
         .context-head p{margin:4px 0 0;color:var(--te-muted);font-size:10px}
         .tariff-pill{border:1px solid #dce6f3;background:#f7faff;border-radius:12px;padding:9px 12px;color:var(--te-muted);font-size:9px}
         .tariff-pill span{margin-right:6px}.tariff-pill strong{font-size:18px;color:var(--te-blue)}
-        .zones-panel{margin-top:12px;padding:13px 15px;border:1px solid #e5eaf2;border-radius:13px;background:#fbfcfe}
-        .zones-head{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:10px}
-        .zones-head b{font-size:11px;color:var(--te-text)}.zones-head span{font-size:9px;color:var(--te-muted)}
-        .zones-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:9px}
-        .zone-box{padding:10px;border-radius:10px;background:#fff;border:1px solid #edf0f5}
-        .zone-box small{display:block;color:var(--te-muted);font-size:8px}.zone-box strong{display:block;margin-top:3px;font-size:16px;color:var(--te-text)}
-        .zone-box em{display:block;margin-top:2px;font-size:8px;color:var(--te-muted);font-style:normal}
+        .zones-panel{margin-top:12px;padding:16px 17px;border:1px solid #dfe7f2;border-radius:16px;background:linear-gradient(180deg,#fbfdff 0%,#f6f9fd 100%);box-shadow:0 6px 20px rgba(35,55,85,.045)}
+        .zones-head{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:12px}
+        .zones-head>div:first-child{display:flex;flex-direction:column;gap:3px}
+        .zones-head b{font-size:12px;color:var(--te-text);letter-spacing:.01em}
+        .zones-head span{font-size:9px;color:var(--te-muted)}
+        .zones-tariff{padding:7px 11px;border-radius:10px;background:#edf3ff;border:1px solid #d5e2ff;color:var(--te-blue);font-size:11px;font-weight:800;letter-spacing:.03em}
+        .zones-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}
+        .zone-box{position:relative;min-width:0;padding:13px 13px 11px;border-radius:13px;background:#fff;border:1px solid #e4eaf2;box-shadow:0 2px 8px rgba(35,55,85,.035)}
+        .zone-top{display:flex;align-items:center;gap:7px}
+        .zone-top small{color:var(--te-muted);font-size:8px}
+        .zone-badge{display:inline-flex;align-items:center;justify-content:center;min-width:25px;height:20px;padding:0 6px;border-radius:7px;background:#eef3fb;color:#47617f;font-size:9px;font-weight:900;letter-spacing:.03em}
+        .zone-box strong{display:block;margin-top:9px;font-size:20px;line-height:1.05;color:var(--te-text);white-space:nowrap}
+        .zone-box strong i{font-style:normal;font-size:10px;font-weight:700;color:var(--te-muted)}
+        .zone-bottom{display:flex;justify-content:space-between;gap:8px;margin-top:11px;padding-top:9px;border-top:1px solid #eef1f5;align-items:center}
+        .zone-bottom span{font-size:8px;color:var(--te-muted)}
+        .zone-bottom b{font-size:11px;color:var(--te-text);white-space:nowrap}
+        .zone-t1 .zone-badge{background:#edf3ff;color:#3f6acb}
+        .zone-t2 .zone-badge{background:#edf9f4;color:#328267}
+        .zone-t3 .zone-badge{background:#fff6e6;color:#a87516}
         .pse-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
         .pse-card{padding:13px;border:1px solid #e5eaf2;border-radius:13px;background:#fbfcfe}
         .pse-card-head{display:flex;justify-content:space-between;gap:10px;align-items:flex-start}
@@ -707,7 +719,7 @@ class TauronEnergyCard extends HTMLElement {
         .wide-refresh{width:100%;margin-top:13px;min-height:40px;border-radius:10px;font-size:12px;font-weight:700}
         .footer{display:flex;justify-content:space-between;gap:12px;color:#8c98a9;font-size:9px;padding:3px 2px 0}
         @media(max-width:1050px){.hero-grid{grid-template-columns:1fr 1fr}.hero{grid-column:1/-1}.stat-grid{grid-template-columns:repeat(3,1fr)}}
-        @media(max-width:700px){.panel{padding:13px;border-radius:14px}.top{align-items:flex-start}.connection{display:none}.hero-grid,.details-grid,.pse-grid{grid-template-columns:1fr}.hero{grid-column:auto;min-height:210px}.stat-grid{grid-template-columns:repeat(2,1fr)}.hero-meta{gap:18px}.footer{flex-direction:column}.chart-wrap{height:230px}.context-head{align-items:flex-start;flex-direction:column}}
+        @media(max-width:700px){.panel{padding:13px;border-radius:14px}.top{align-items:flex-start}.connection{display:none}.hero-grid,.details-grid,.pse-grid,.zones-grid{grid-template-columns:1fr}.hero{grid-column:auto;min-height:210px}.stat-grid{grid-template-columns:repeat(2,1fr)}.hero-meta{gap:18px}.footer{flex-direction:column}.chart-wrap{height:230px}.context-head{align-items:flex-start;flex-direction:column}.zone-box strong{font-size:18px}}
       </style>
       <section class="panel" aria-label="Tauron eLicznik">
         <header class="top">
@@ -727,7 +739,7 @@ class TauronEnergyCard extends HTMLElement {
         <div class="hero-grid">
           <div class="hero">
             <div class="budget-ring" style="--budget:${budgetPercent}%"><div>${this._fmt(budgetPercent,0)}%<span>dziennego budżetu</span></div></div>
-            <div class="eyebrow">Pobór · ${this._dateLabel(this._selectedDate)} <span class="eyebrow-dot"></span></div>
+            <div class="eyebrow">POBÓR · ${this._dateLabel(this._selectedDate)} <span class="eyebrow-dot"></span></div>
             <div class="big-value">${Number.isFinite(dailyConsumed) ? this._fmt(dailyConsumed,2) : "—"} <small>kWh</small></div>
             <div class="hero-meta">
               <span><b style="color:#89a9ff">SUMA · ${this._dateLabel(this._selectedDate).toUpperCase()}</b><strong>${Number.isFinite(dailyConsumed) ? this._fmt(dailyConsumed,2) : "—"} kWh</strong></span>
@@ -753,13 +765,28 @@ class TauronEnergyCard extends HTMLElement {
 
         <div class="zones-panel">
           <div class="zones-head">
-            <b>Strefy taryfowe</b>
-            <span>${this._escape(this._state(c.tariff_entity)?.state || "—")}</span>
+            <div>
+              <b>Strefy taryfowe</b>
+              <span>Stan licznika i zużycie dzisiaj</span>
+            </div>
+            <div class="zones-tariff">${this._escape(this._state(c.tariff_entity)?.state || "—")}</div>
           </div>
           <div class="zones-grid">
-            <div class="zone-box"><small>T1 · licznik</small><strong>${Number.isFinite(t1) ? this._fmt(t1,0) : "—"} kWh</strong><em>Dzisiaj: ${Number.isFinite(t1Daily) ? this._fmt(t1Daily,1) : "—"} kWh</em></div>
-            <div class="zone-box"><small>T2 · licznik</small><strong>${Number.isFinite(t2) ? this._fmt(t2,0) : "—"} kWh</strong><em>Dzisiaj: ${Number.isFinite(t2Daily) ? this._fmt(t2Daily,1) : "—"} kWh</em></div>
-            <div class="zone-box"><small>T3 · licznik</small><strong>${Number.isFinite(t3) ? this._fmt(t3,0) : "—"} kWh</strong><em>Dzisiaj: ${Number.isFinite(t3Daily) ? this._fmt(t3Daily,1) : "—"} kWh</em></div>
+            <div class="zone-box zone-t1">
+              <div class="zone-top"><span class="zone-badge">T1</span><small>Strefa 1</small></div>
+              <strong>${Number.isFinite(t1) ? this._fmt(t1,0) : "—"} <i>kWh</i></strong>
+              <div class="zone-bottom"><span>Dzisiaj</span><b>${Number.isFinite(t1Daily) ? this._fmt(t1Daily,1) : "—"} kWh</b></div>
+            </div>
+            <div class="zone-box zone-t2">
+              <div class="zone-top"><span class="zone-badge">T2</span><small>Strefa 2</small></div>
+              <strong>${Number.isFinite(t2) ? this._fmt(t2,0) : "—"} <i>kWh</i></strong>
+              <div class="zone-bottom"><span>Dzisiaj</span><b>${Number.isFinite(t2Daily) ? this._fmt(t2Daily,1) : "—"} kWh</b></div>
+            </div>
+            <div class="zone-box zone-t3">
+              <div class="zone-top"><span class="zone-badge">T3</span><small>Strefa 3</small></div>
+              <strong>${Number.isFinite(t3) ? this._fmt(t3,0) : "—"} <i>kWh</i></strong>
+              <div class="zone-bottom"><span>Dzisiaj</span><b>${Number.isFinite(t3Daily) ? this._fmt(t3Daily,1) : "—"} kWh</b></div>
+            </div>
           </div>
         </div>
 
