@@ -485,7 +485,7 @@ class TauronEnergyCard extends HTMLElement {
           <path d="M24 92 H130 M30 119 H124" fill="none" stroke="#5e7690" stroke-width="2"/>
           <circle cx="77" cy="26" r="5" fill="#a6ddff" filter="url(#sceneGlow)"/>
           <text x="77" y="258" text-anchor="middle" class="scene-label">SŁUP ENERGETYCZNY</text>
-          <text x="77" y="274" text-anchor="middle" class="scene-sub">Sieć TAURON</text>
+          <text x="77" y="274" text-anchor="middle" class="scene-sub">Sieć TAURON · 11 kV / 230 V</text>
         </g>
 
         <g class="scene-house" transform="translate(1020 92)">
@@ -497,7 +497,7 @@ class TauronEnergyCard extends HTMLElement {
           <rect x="114" y="111" width="8" height="20" fill="#fff6bf" opacity=".92"/><rect x="128" y="111" width="8" height="20" fill="#fff6bf" opacity=".92"/>
           <path d="M124 64 V14" stroke="#8399b0" stroke-width="3"/><path d="M132 14 C141 25 141 39 132 48" fill="none" stroke="#8399b0" stroke-width="3"/>
           <text x="78" y="218" text-anchor="middle" class="scene-label">TWÓJ DOM</text>
-          <text x="78" y="234" text-anchor="middle" class="scene-sub">Instalacja odbiorcza</text>
+          <text x="78" y="234" text-anchor="middle" class="scene-sub">Pobór energii</text>
         </g>
 
         <g class="scene-device scene-meter" transform="translate(430 75)">
@@ -674,6 +674,12 @@ class TauronEnergyCard extends HTMLElement {
   const currentDate = this._dateKey(new Date());
   const selectedDate = this._selectedDate || currentDate;
   const selectedLabel = this._dateLabel(selectedDate);
+  const historyForStats = this._chartHistorySeries() || [];
+  const historyValues = historyForStats.map(x => Number(x.value)).filter(Number.isFinite);
+  const minCandidates = historyValues.filter(v => v >= 0);
+  const maxDaily30 = historyValues.length ? Math.max(...historyValues) : NaN;
+  const minDaily30 = minCandidates.length ? Math.min(...minCandidates) : NaN;
+  const total30 = historyValues.length ? historyValues.reduce((sum, v) => sum + v, 0) : NaN;
   const status = Number.isFinite(dailyConsumed) && dailyConsumed > 0 ? "W porządku" : "Brak danych";
 
   this.shadowRoot.innerHTML = `
@@ -699,9 +705,10 @@ class TauronEnergyCard extends HTMLElement {
       .brand{display:flex;align-items:center;gap:10px;min-width:220px}
       .brand-mark{
         width:48px;height:48px;border-radius:15px;display:grid;place-items:center;
-        background:linear-gradient(145deg,#ff2c83,#7b49ff);box-shadow:0 10px 30px rgba(123,73,255,.26);
-        color:#fff;font-size:23px;font-weight:900
+        background:linear-gradient(145deg,#21153b,#471e69);border:1px solid #683e8f;
+        box-shadow:0 10px 30px rgba(123,73,255,.26)
       }
+      .brand-mark svg{width:34px;height:34px;filter:drop-shadow(0 0 7px rgba(255,59,145,.28))}
       .brand h1{margin:0;font-size:21px;letter-spacing:-.03em;line-height:1}
       .brand h1 span{display:block;color:#ff3b93;font-size:16px;margin-top:2px}
       .brand small{display:block;color:var(--te-muted);margin-top:5px;font-size:9px}
@@ -750,10 +757,12 @@ class TauronEnergyCard extends HTMLElement {
       .flow-live .scene-status{color:#71efad;border-color:rgba(39,220,132,.35)}
       .flow-live .scene-status i{background:#27dc84;box-shadow:0 0 12px rgba(39,220,132,.8);animation:sceneStatusPulse 1.8s ease-out infinite}
       @keyframes sceneStatusPulse{0%{transform:scale(.85);box-shadow:0 0 0 0 rgba(39,220,132,.35)}70%{transform:scale(1);box-shadow:0 0 0 8px rgba(39,220,132,0)}100%{box-shadow:0 0 0 0 rgba(39,220,132,0)}}
-      .scene-svg{display:block;width:100%;height:auto;min-height:300px}
+      .scene-svg{display:block;width:100%;height:auto;min-height:270px;aspect-ratio:1200/310}
       .scene-label{font-family:system-ui,sans-serif;fill:#edf7ff;font-size:11px;font-weight:900;letter-spacing:.08em}
       .scene-sub{font-family:system-ui,sans-serif;fill:#9ab3c8;font-size:8px;font-weight:600}
-      .scene-wire{fill:none;stroke:url(#powerBeam);stroke-width:4;stroke-linecap:round;filter:url(#sceneGlow)}
+      .scene-wire{fill:none;stroke:url(#powerBeam);stroke-width:5;stroke-linecap:round;filter:url(#sceneGlow)}
+      .scene-pole{filter:drop-shadow(0 0 10px rgba(99,190,255,.12))}
+      .scene-house{filter:drop-shadow(0 16px 26px rgba(0,0,0,.38))}
       .scene-wire-glow{fill:none;stroke:#41a9ff;stroke-opacity:.18;stroke-width:15;stroke-linecap:round;filter:url(#sceneGlow)}
       .scene-pulses{position:absolute;left:16%;right:16%;top:46%;height:20px;pointer-events:none;z-index:2}
       .scene-pulses .pulse{
@@ -857,6 +866,7 @@ class TauronEnergyCard extends HTMLElement {
       .stat-row strong{font-size:12px;color:#e7f3fb;white-space:nowrap}
       .info-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}
       .info{padding:10px;border:1px solid #17364b;background:#081b2a;border-radius:11px}.info-label{color:#748fa4;font-size:7px;text-transform:uppercase;letter-spacing:.08em}.info-value{margin-top:5px;color:#e6f3fc;font-size:10px;font-weight:800}
+      .status-live-dot{display:inline-block;width:7px;height:7px;border-radius:50%;background:#27dc84;box-shadow:0 0 9px rgba(39,220,132,.7);margin-right:5px}
       .full{grid-column:1/-1}
       .refresh-wide{width:100%;margin-top:10px;height:39px;border-radius:10px;border:1px solid #20527a;background:#0b2b44;color:#cdeaff;font-weight:800;cursor:pointer}
       .refresh-wide:hover{background:#0e3755}
@@ -887,7 +897,12 @@ class TauronEnergyCard extends HTMLElement {
     <section class="dashboard" aria-label="Tauron eLicznik">
       <header class="topbar">
         <div class="brand">
-          <div class="brand-mark" aria-hidden="true">⚡</div>
+          <div class="brand-mark" aria-hidden="true">
+            <svg viewBox="0 0 48 48">
+              <path d="M8 19c7-10 14-14 21-14 5 0 8 2 11 5-8-2-13 0-17 5 6 0 11 3 15 8-7-2-13-2-18 2 5 2 8 5 9 10-8-1-15-5-19-12-3-5-3-9-2-14z" fill="#ff3b91"/>
+              <path d="M8 19c4 5 10 8 18 8 5 0 10-1 14-4-2 7-8 12-16 14-6-1-11-4-15-9-3-4-3-6-1-9z" fill="#7b49ff" opacity=".92"/>
+            </svg>
+          </div>
           <div>
             <h1>TAURON <span>eLicznik</span></h1>
             <small>${this._escape(c.title || "Energia")} · zużycie i analiza</small>
@@ -1003,12 +1018,12 @@ class TauronEnergyCard extends HTMLElement {
 
       <div class="bottom-grid">
         <section class="panel-card">
-          <div class="card-head"><div><strong>Statystyki</strong><span>Na podstawie aktualnych encji</span></div></div>
+          <div class="card-head"><div><strong>Statystyki</strong><span>Na podstawie historii zużycia</span></div></div>
           <div class="stats-list">
-            <div class="stat-row"><div class="stat-left"><i>▥</i>Średnie zużycie dzienne</div><strong>${Number.isFinite(dailyAverage) ? this._fmt(dailyAverage,2) + " kWh" : "—"}</strong></div>
-            <div class="stat-row"><div class="stat-left"><i>↗</i>Łącznie pobrano</div><strong>${this._fmt(consumed,1)} kWh</strong></div>
-            <div class="stat-row"><div class="stat-left"><i>↘</i>Łącznie oddano</div><strong>${this._fmt(exported,1)} kWh</strong></div>
-            <div class="stat-row"><div class="stat-left"><i>Σ</i>Bilans okresu</div><strong class="${balanceClass}">${this._fmt(balance,1)} kWh</strong></div>
+            <div class="stat-row"><div class="stat-left"><i>▥</i>Średnie dzienne zużycie</div><strong>${Number.isFinite(dailyAverage) ? this._fmt(dailyAverage,2) + " kWh" : "—"}</strong></div>
+            <div class="stat-row"><div class="stat-left"><i>↗</i>Najwyższe zużycie (30 dni)</div><strong>${Number.isFinite(maxDaily30) ? this._fmt(maxDaily30,1) + " kWh" : "—"}</strong></div>
+            <div class="stat-row"><div class="stat-left"><i>↘</i>Najniższe zużycie (30 dni)</div><strong>${Number.isFinite(minDaily30) ? this._fmt(minDaily30,1) + " kWh" : "—"}</strong></div>
+            <div class="stat-row"><div class="stat-left"><i>Σ</i>Łączne zużycie (30 dni)</div><strong>${Number.isFinite(total30) ? this._fmt(total30,1) + " kWh" : "—"}</strong></div>
           </div>
         </section>
 
@@ -1016,10 +1031,10 @@ class TauronEnergyCard extends HTMLElement {
           <div class="card-head"><div><strong>Informacje o liczniku</strong><span>eLicznik</span></div></div>
           <div class="info-grid">
             <div class="info"><div class="info-label">Model</div><div class="info-value">MA309M</div></div>
+            <div class="info"><div class="info-label">Numer licznika</div><div class="info-value">${this._escape(this._state(c.meter_number_entity)?.state || "—")}</div></div>
             <div class="info"><div class="info-label">Taryfa</div><div class="info-value">${this._escape(String(tariff))}</div></div>
             <div class="info"><div class="info-label">Ostatni odczyt</div><div class="info-value">${this._date(lastReading)}</div></div>
-            <div class="info"><div class="info-label">Aktualizacja</div><div class="info-value">${updated ? this._relative(updated) : "—"}</div></div>
-            <div class="info full"><div class="info-label">Okres rozliczeniowy</div><div class="info-value">${Number.isFinite(days) ? this._fmt(days,0) + " dni do końca" : "—"} · budżet dzienny ${Number.isFinite(dailyBudget) ? this._fmt(dailyBudget,2) : "—"} kWh</div></div>
+            <div class="info full"><div class="info-label">Status</div><div class="info-value"><span class="status-live-dot"></span> Połączony (eLicznik)</div></div>
           </div>
           <button class="refresh-wide" title="Odśwież dane Tauron" aria-label="Odśwież dane Tauron" ${this._loading ? "disabled" : ""}>↻ &nbsp; Odśwież dane z eLicznik</button>
         </section>
