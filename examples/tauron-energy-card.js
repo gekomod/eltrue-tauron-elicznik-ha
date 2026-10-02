@@ -672,7 +672,7 @@ class TauronEnergyCard extends HTMLElement {
       @keyframes sceneStatusPulse{0%{transform:scale(.85);box-shadow:0 0 0 0 rgba(39,220,132,.35)}70%{transform:scale(1);box-shadow:0 0 0 8px rgba(39,220,132,0)}100%{box-shadow:0 0 0 0 rgba(39,220,132,0)}}
       .scene-art{position:relative;aspect-ratio:1263/235;min-height:235px;overflow:hidden;background:
         radial-gradient(circle at 30% 35%,rgba(20,94,160,.25),transparent 28%),linear-gradient(180deg,#07192d,#061a20)}
-      .scene-art img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;display:block}
+      .scene-art img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;display:block;image-rendering:auto}
       .scene-motion{position:absolute;inset:0;width:100%;height:100%;overflow:visible;pointer-events:none}
       .motion-wire{fill:none;stroke:#49c9ff;stroke-width:3;stroke-linecap:round;opacity:.25;filter:url(#motionGlow)}
       .motion-pulses circle{fill:#c7f5ff;filter:url(#motionGlow);opacity:0}
@@ -719,7 +719,7 @@ class TauronEnergyCard extends HTMLElement {
       .scene-bottom span{display:flex;align-items:center;gap:6px}.scene-bottom strong{color:#e8f5ff;font-size:9px}
       .flow-dot{display:inline-block;width:6px;height:6px;border-radius:50%;background:#36d8ff;box-shadow:0 0 8px rgba(54,216,255,.65)}
 
-      .kpi-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin-bottom:14px}
+      .kpi-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;margin-bottom:14px}
       .kpi{
         min-height:150px;padding:16px;border-radius:16px;border:1px solid #17354b;
         background:linear-gradient(180deg,#0a1d2c,#071827);box-shadow:0 10px 24px rgba(0,0,0,.16);overflow:hidden;position:relative
@@ -741,7 +741,7 @@ class TauronEnergyCard extends HTMLElement {
       .kpi.orange .kpi-bar i{background:linear-gradient(90deg,#ff9c3a,#ffd071)}.kpi.green .kpi-bar i{background:linear-gradient(90deg,#28d883,#83f4bd)}
       .kpi.purple .kpi-bar i{background:linear-gradient(90deg,#9554ff,#c49aff)}
 
-      .main-grid{display:grid;grid-template-columns:minmax(0,1.12fr) minmax(0,1fr);gap:12px;margin-bottom:12px}
+      .main-grid{display:grid;grid-template-columns:minmax(0,1.08fr) minmax(0,1fr);gap:12px;margin-bottom:12px}
       .panel-card{border:1px solid #17354b;border-radius:17px;background:linear-gradient(180deg,#091b29,#071725);padding:16px;box-shadow:0 10px 26px rgba(0,0,0,.16)}
       .card-head{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:13px}
       .card-head strong{font-size:15px;letter-spacing:-.015em}
@@ -808,7 +808,7 @@ class TauronEnergyCard extends HTMLElement {
       .mini-trend{height:40px;margin-top:11px}.mini-trend svg{width:100%;height:100%;display:block}
       .mini-line{fill:none;stroke:#33dc8b;stroke-width:2.2;stroke-linecap:round}.mini-fill{fill:url(#miniFill)}
       .cost-note,.carbon-note{margin-top:6px;font-size:8px;color:#718b9f}
-      .budget-ring{position:absolute;right:14px;top:14px;width:48px;height:48px;border-radius:50%;background:conic-gradient(#36aaff ${budgetPercent}%,#173148 0);display:grid;place-items:center}
+      .budget-ring{display:none}
       .budget-ring::before{content:"";position:absolute;inset:5px;background:#091a29;border-radius:50%}.budget-ring span{position:relative;font-size:9px;font-weight:900}
 
       @media(prefers-reduced-motion:reduce){
@@ -859,7 +859,6 @@ class TauronEnergyCard extends HTMLElement {
 
       <section class="kpi-grid" aria-label="Podsumowanie energii">
         <article class="kpi">
-          <div class="budget-ring"><span>${this._fmt(budgetPercent,0)}%</span></div>
           <div class="kpi-top"><div class="kpi-icon">♧</div><span class="kpi-label">Pobór dzisiaj</span></div>
           <div class="kpi-value">${Number.isFinite(dailyConsumed) ? this._fmt(dailyConsumed,2) : "—"} <small>kWh</small></div>
           <div class="kpi-sub">${selectedLabel}<strong>${status === "W porządku" ? "↓ w normie" : "Brak danych"}</strong></div>
@@ -867,9 +866,9 @@ class TauronEnergyCard extends HTMLElement {
         </article>
 
         <article class="kpi">
-          <div class="kpi-top"><div class="kpi-icon">⚡</div><span class="kpi-label">Moc średnia dzisiaj</span></div>
-          <div class="kpi-value">${fmtPower(avgPower)}</div>
-          <div class="kpi-sub">wyliczona z dziennego zużycia</div>
+          <div class="kpi-top"><div class="kpi-icon">⚡</div><span class="kpi-label">Moc chwilowa</span></div>
+          <div class="kpi-value">${fmtPower(Number.isFinite(power) ? power : avgPower)}</div>
+          <div class="kpi-sub">${Number.isFinite(power) ? "odczyt z licznika" : "średnia z dzisiejszego zużycia"}</div>
           <div class="mini-trend">
             <svg viewBox="0 0 220 40" preserveAspectRatio="none" aria-hidden="true">
               <polyline class="mini-line" points="0,30 16,24 31,28 47,18 63,23 79,14 95,20 111,9 127,18 143,12 159,20 175,10 191,16 207,6 220,10"/>
