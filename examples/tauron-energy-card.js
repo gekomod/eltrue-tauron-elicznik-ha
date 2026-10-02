@@ -650,7 +650,7 @@ class TauronEnergyCard extends HTMLElement {
     }
   }
 
-  _render {
+  _render() {
   if (!this.shadowRoot || !this._hass || !this._config.consumed_entity) return;
 
   const c = this._config;
