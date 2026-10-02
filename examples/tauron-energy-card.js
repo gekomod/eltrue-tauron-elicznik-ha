@@ -438,13 +438,13 @@ class TauronEnergyCard extends HTMLElement {
     const a1="M166 91 C250 86 348 103 446 127";
     const a2="M595 135 C646 136 688 131 735 128";
     const a3="M910 130 C963 135 1008 157 1050 167";
-    const arrow=(path,delay)=>\`
+    const arrow=(path,delay)=>`
       <g class="energy-arrow">
         <path d="M0 0 L16 9 L0 18"/>
         <animateMotion dur="2.8s" begin="{{delay}}s" repeatCount="indefinite" rotate="auto" path="{{path}}"/>
-      </g>\`.replaceAll("{{",").replaceAll(}","}");
+      </g>`.replaceAll("{{",").replaceAll(}","}");
 
-    return \`
+    return `
       <section class="scene {{active?"flow-live":"flow-idle"}}" aria-label="Przepływ energii">
         <div class="scene-topbar">
           <div>
@@ -464,16 +464,16 @@ class TauronEnergyCard extends HTMLElement {
           <div class="scene-meter-live" aria-label="Rzeczywisty stan licznika z Home Assistant"><strong>{{meter}}</strong><span>kWh</span></div>
           <div class="scene-data-strip">
             <span><b>Pobór dzisiaj</b> {{Number.isFinite(dailyConsumed)?this._fmt(dailyConsumed,2):"—"}} kWh</span>
-            {{Number.isFinite(power)?\`<span><b>Moc chwilowa</b> {{this._fmt(power,0)}} W</span>\`:"<span><b>Moc chwilowa</b> —</span>"}}
-            {{Number.isFinite(t1)?\`<span><b>T1</b> {{this._fmt(t1,0)}} kWh</span>\`:""}}
-            {{Number.isFinite(t2)?\`<span><b>T2</b> {{this._fmt(t2,0)}} kWh</span>\`:""}}
-            {{Number.isFinite(t3)?\`<span><b>T3</b> {{this._fmt(t3,0)}} kWh</span>\`:""}}
+            {{Number.isFinite(power)?`<span><b>Moc chwilowa</b> {{this._fmt(power,0)}} W</span>`:"<span><b>Moc chwilowa</b> —</span>"}}
+            {{Number.isFinite(t1)?`<span><b>T1</b> {{this._fmt(t1,0)}} kWh</span>`:""}}
+            {{Number.isFinite(t2)?`<span><b>T2</b> {{this._fmt(t2,0)}} kWh</span>`:""}}
+            {{Number.isFinite(t3)?`<span><b>T3</b> {{this._fmt(t3,0)}} kWh</span>`:""}}
           </div>
           <div class="scene-vignette" aria-hidden="true"></div>
         </div>
-        <div class="scene-bottom"><span><i class="flow-dot"></i>{{active?"Animowany przepływ aktywny":"Brak dzisiejszego poboru"}} · dane rzeczywiste z Home Assistant</span><strong>{{Number.isFinite(dailyConsumed)?\`Dzisiaj · {{this._fmt(dailyConsumed,2)}} kWh\`:"Brak danych dziennych"}}</strong></div>
+        <div class="scene-bottom"><span><i class="flow-dot"></i>{{active?"Animowany przepływ aktywny":"Brak dzisiejszego poboru"}} · dane rzeczywiste z Home Assistant</span><strong>{{Number.isFinite(dailyConsumed)?`Dzisiaj · {{this._fmt(dailyConsumed,2)}} kWh`:"Brak danych dziennych"}}</strong></div>
       </section>
-    \`.replaceAll("{{",").replaceAll(}","}");
+    `.replaceAll("{{",").replaceAll(}","}");
   }
   _chartSvg() {
     const history=this._chartHistorySeries()||[];
@@ -481,9 +481,9 @@ class TauronEnergyCard extends HTMLElement {
     const values=Array.isArray(entry?.values)?entry.values.map(Number):[];
     const valid=values.filter(Number.isFinite);
     if(!valid.length){
-      return \`
+      return `
         <div class="chart-empty"><strong>Brak profilu godzinowego</strong><span>Oczekiwanie na dane godzinowe z /energia/api.</span></div>
-      \`;
+      `;
     }
 
     const W=900,H=255,left=48,right=16,top=42,bottom=34;
@@ -504,22 +504,22 @@ class TauronEnergyCard extends HTMLElement {
       const h=Math.max(2,(value/max)*plotH);
       const y=top+plotH-h;
       const zone=zoneForHour(i);
-      return \`<g class="hourbar" tabindex="0" data-kind="Pobór" data-label="{{String(i).padStart(2,"0")}}:00" data-value="{{value}}">
+      return `<g class="hourbar" tabindex="0" data-kind="Pobór" data-label="{{String(i).padStart(2,"0")}}:00" data-value="{{value}}">
         <rect class="{{zone.cls}}" x="{{x.toFixed(1)}}" y="{{y.toFixed(1)}}" width="{{barW.toFixed(1)}}" height="{{h.toFixed(1)}}" rx="4"/>
         <title>{{String(i).padStart(2,"0")}}:00 · {{zone.name}} · {{this._fmt(value,2)}} kWh</title>
-      </g>\`;
+      </g>`;
     }).join("");
 
     const grid=[0,.25,.5,.75,1].map(r=>{
       const y=top+plotH-r*plotH;
-      return \`<line class="chart-grid" x1="{{left}}" y1="{{y}}" x2="{{W-right}}" y2="{{y}}"/>
-        <text class="chart-axis-y" x="{{left-8}}" y="{{y+4}}" text-anchor="end">{{this._fmt(max*r,1)}}</text>\`;
+      return `<line class="chart-grid" x1="{{left}}" y1="{{y}}" x2="{{W-right}}" y2="{{y}}"/>
+        <text class="chart-axis-y" x="{{left-8}}" y="{{y+4}}" text-anchor="end">{{this._fmt(max*r,1)}}</text>`;
     }).join("");
 
     const labels=values.map((_,i)=>{
       if(values.length>12&&i%2!==0)return"";
       const x=left+i*slot+slot/2;
-      return \`<text class="chart-axis-x" x="{{x.toFixed(1)}}" y="{{H-10}}" text-anchor="middle">{{String(i).padStart(2,"0")}}</text>\`;
+      return `<text class="chart-axis-x" x="{{x.toFixed(1)}}" y="{{H-10}}" text-anchor="middle">{{String(i).padStart(2,"0")}}</text>`;
     }).join("");
 
     const idx=history.findIndex(x=>x.date===entry?.date);
@@ -527,12 +527,12 @@ class TauronEnergyCard extends HTMLElement {
     const delta=Number.isFinite(entry?.value)&&Number.isFinite(previous)&&previous>0
       ?((entry.value-previous)/previous)*100:NaN;
 
-    return \`
+    return `
       <div class="chart-inner">
         <div class="chart-summary">
           <div><strong>{{Number.isFinite(entry?.value)?this._fmt(entry.value,1):"—"}} kWh</strong>
           <span>{{this._dateLabel(entry?.date||this._selectedDate)}}</span>
-          {{Number.isFinite(delta)?\`<em class="{{delta<=0?"down":"up"}}">{{delta<=0?"↓":"↑"}} {{this._fmt(Math.abs(delta),0)}}%</em>\`:""}}</div>
+          {{Number.isFinite(delta)?`<em class="{{delta<=0?"down":"up"}}">{{delta<=0?"↓":"↑"}} {{this._fmt(Math.abs(delta),0)}}%</em>`:""}}</div>
           <div class="chart-tabs" role="tablist" aria-label="Zakres">
             <button class="chart-tab active" type="button">Dzień</button>
             <button class="chart-tab" type="button">Tydzień</button>
@@ -544,7 +544,7 @@ class TauronEnergyCard extends HTMLElement {
         </svg>
         <div class="chart-legend"><span><i class="legend-blue"></i>T1</span><span><i class="legend-orange"></i>T2</span><span><i class="legend-purple"></i>T3</span></div>
       </div>
-    \`.replaceAll("{{",").replaceAll(}","}");
+    `.replaceAll("{{",").replaceAll(}","}");
   }
   async _refresh() {
     const entity = this._config.refresh_entity;
@@ -612,7 +612,7 @@ class TauronEnergyCard extends HTMLElement {
     const currentDate=this._dateKey(new Date());
     const selectedLabel=this._dateLabel(selectedDate);
 
-    this.shadowRoot.innerHTML=String.raw\`
+    this.shadowRoot.innerHTML=String.raw`
       <style>
         :host{
           display:block;width:100%;color-scheme:dark;
@@ -850,7 +850,7 @@ class TauronEnergyCard extends HTMLElement {
           <span>Wybrany dzień: ${selectedDate} · Auto ${this._autoRefreshMinutes} min · Aktualizacja ${updated?this._date(updated):"—"}</span>
         </footer>
       </section>
-    \`;
+    `;
   }
 }
 
