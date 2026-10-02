@@ -424,15 +424,7 @@ class TauronEnergyCard extends HTMLElement {
   const active = Number.isFinite(dailyConsumed) && dailyConsumed > 0;
   const status = active ? "Przepływ aktywny" : "Brak dzisiejszego poboru";
   const statusClass = active ? "flow-live" : "flow-idle";
-  const reducedMotion = window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches;
-  const motion = active && !reducedMotion;
-
-  const pulse = (begin) => motion ? `
-    <g class="pulse">
-      <path d="M0 0 L13 8 L0 16" />
-      <animateMotion dur="3.2s" begin="${begin}s" repeatCount="indefinite" rotate="auto"
-        path="M208 140 C275 125 352 122 430 146 S650 148 720 146 S920 145 1020 154" />
-    </g>` : "";
+  const imageUrl = this._config.flow_image_url || "/local/tauron-energy-flow.jpg";
 
   return `
     <section class="scene ${statusClass}" aria-label="Przepływ energii od sieci Tauron do domu">
@@ -445,104 +437,25 @@ class TauronEnergyCard extends HTMLElement {
         <div class="scene-status"><i></i>${status}</div>
       </div>
 
-      <svg class="scene-svg" viewBox="0 0 1200 310" role="img"
-           aria-label="Słup energetyczny, licznik MA309M, rozdzielnica główna i dom połączone animowanym przepływem energii">
-        <defs>
-          <linearGradient id="sceneSky" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stop-color="#071a32"/>
-            <stop offset="55%" stop-color="#081a2b"/>
-            <stop offset="100%" stop-color="#10261d"/>
-          </linearGradient>
-          <linearGradient id="sceneGround" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stop-color="#0f2a22"/>
-            <stop offset="100%" stop-color="#07131b"/>
-          </linearGradient>
-          <linearGradient id="powerBeam" x1="0" y1="0" x2="1" y2="0">
-            <stop offset="0%" stop-color="#4db6ff" stop-opacity=".15"/>
-            <stop offset="18%" stop-color="#4db6ff" stop-opacity=".9"/>
-            <stop offset="50%" stop-color="#b8ecff" stop-opacity="1"/>
-            <stop offset="82%" stop-color="#4db6ff" stop-opacity=".9"/>
-            <stop offset="100%" stop-color="#4db6ff" stop-opacity=".15"/>
-          </linearGradient>
-          <filter id="sceneGlow"><feGaussianBlur stdDeviation="5" result="blur"/><feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
-          <filter id="deviceGlow"><feGaussianBlur stdDeviation="8" result="blur"/><feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
-        </defs>
-
-        <rect width="1200" height="310" rx="18" fill="url(#sceneSky)"/>
-        <g opacity=".45" fill="#c7dcff">
-          <circle cx="108" cy="52" r="1.4"/><circle cx="167" cy="31" r="1.1"/><circle cx="258" cy="72" r="1.4"/>
-          <circle cx="334" cy="43" r="1.1"/><circle cx="454" cy="34" r="1.5"/><circle cx="548" cy="59" r="1.1"/>
-          <circle cx="635" cy="30" r="1.3"/><circle cx="764" cy="67" r="1.2"/><circle cx="896" cy="43" r="1.3"/>
-          <circle cx="1032" cy="69" r="1.5"/><circle cx="1134" cy="36" r="1.2"/>
-        </g>
-        <path d="M0 245 Q160 198 310 242 T590 236 T850 230 T1200 242 V310 H0Z" fill="url(#sceneGround)"/>
-        <path d="M0 249 Q180 216 345 250 T690 242 T930 236 T1200 249" fill="none" stroke="#173b2f" stroke-width="3"/>
-
-        <g class="scene-pole" transform="translate(88 37)">
-          <path d="M35 228 L77 26 L119 228 M47 172 H107 M41 199 H113 M32 90 H122 M40 60 H114 M77 26 V228"
-            fill="none" stroke="#91a9c1" stroke-width="4" stroke-linecap="round"/>
-          <path d="M35 228 L77 26 L119 228" fill="none" stroke="#d4e2ef" stroke-width="2"/>
-          <path d="M24 92 H130 M30 119 H124" fill="none" stroke="#5e7690" stroke-width="2"/>
-          <circle cx="77" cy="26" r="5" fill="#a6ddff" filter="url(#sceneGlow)"/>
-          <text x="77" y="258" text-anchor="middle" class="scene-label">SŁUP ENERGETYCZNY</text>
-          <text x="77" y="274" text-anchor="middle" class="scene-sub">Sieć TAURON · 11 kV / 230 V</text>
-        </g>
-
-        <g class="scene-house" transform="translate(1020 92)">
-          <path d="M0 86 L78 21 L156 86 V191 H0Z" fill="#182d42" stroke="#8ca5bc" stroke-width="3"/>
-          <path d="M-9 88 L78 13 L165 88" fill="none" stroke="#cedcea" stroke-width="4" stroke-linejoin="round"/>
-          <rect x="65" y="116" width="27" height="75" rx="2" fill="#0a1724" stroke="#7e93a9" stroke-width="2"/>
-          <rect x="16" y="107" width="30" height="28" rx="2" fill="#d6f5ff"/><rect x="110" y="107" width="30" height="28" rx="2" fill="#d6f5ff"/>
-          <rect x="20" y="111" width="8" height="20" fill="#fff6bf" opacity=".92"/><rect x="34" y="111" width="8" height="20" fill="#fff6bf" opacity=".92"/>
-          <rect x="114" y="111" width="8" height="20" fill="#fff6bf" opacity=".92"/><rect x="128" y="111" width="8" height="20" fill="#fff6bf" opacity=".92"/>
-          <path d="M124 64 V14" stroke="#8399b0" stroke-width="3"/><path d="M132 14 C141 25 141 39 132 48" fill="none" stroke="#8399b0" stroke-width="3"/>
-          <text x="78" y="218" text-anchor="middle" class="scene-label">TWÓJ DOM</text>
-          <text x="78" y="234" text-anchor="middle" class="scene-sub">Pobór energii</text>
-        </g>
-
-        <g class="scene-device scene-meter" transform="translate(430 75)">
-          <rect x="0" y="0" width="172" height="158" rx="18" fill="#ced5dc" stroke="#eff5fb" stroke-width="3"/>
-          <rect x="12" y="12" width="148" height="106" rx="11" fill="#b3bdc7" stroke="#6f8293" stroke-width="2"/>
-          <rect x="28" y="30" width="116" height="56" rx="8" fill="#ecf8fb" stroke="#778b9b" stroke-width="2"/>
-          <text x="86" y="64" text-anchor="middle" font-size="25" font-family="monospace" font-weight="800" fill="#122033">001036</text>
-          <text x="126" y="78" text-anchor="middle" font-size="8" font-family="system-ui" font-weight="800" fill="#445b72">kWh</text>
-          <circle cx="38" cy="132" r="11" fill="#69e7af"/><circle cx="38" cy="132" r="5" fill="#113022"/>
-          <circle cx="69" cy="132" r="10" fill="#91b3ca"/><rect x="118" y="126" width="28" height="13" rx="3" fill="#7f8e9b"/>
-          <text x="86" y="178" text-anchor="middle" class="scene-label">LICZNIK MA309M</text>
-          <text x="86" y="194" text-anchor="middle" class="scene-sub">Tauron eLicznik</text>
-          <rect x="-18" y="-18" width="208" height="194" rx="28" fill="none" stroke="#31a9ff" stroke-opacity=".22" stroke-width="4" filter="url(#deviceGlow)"/>
-        </g>
-
-        <g class="scene-device" transform="translate(720 75)">
-          <rect x="0" y="0" width="190" height="158" rx="18" fill="#ccd5de" stroke="#eff5fb" stroke-width="3"/>
-          <rect x="16" y="14" width="158" height="122" rx="10" fill="#edf2f6" stroke="#7b8e9e" stroke-width="2"/>
-          <g transform="translate(30 27)">
-            <rect x="0" y="0" width="128" height="70" rx="6" fill="#f8fafc" stroke="#b3bec8"/>
-            <g fill="#f6f7f9" stroke="#768593" stroke-width="1.5">
-              <rect x="8" y="8" width="15" height="54" rx="2"/><rect x="29" y="8" width="15" height="54" rx="2"/>
-              <rect x="50" y="8" width="15" height="54" rx="2"/><rect x="71" y="8" width="15" height="54" rx="2"/><rect x="92" y="8" width="15" height="54" rx="2"/>
-            </g>
-            <g stroke="#4e6172" stroke-width="2"><path d="M16 24v15"/><path d="M37 24v15"/><path d="M58 24v15"/><path d="M79 24v15"/><path d="M100 24v15"/></g>
+      <div class="scene-art" role="img"
+           aria-label="Ilustracja słupa energetycznego, licznika MA309M, rozdzielnicy głównej i domu">
+        <img src="${this._escape(imageUrl)}" alt="" loading="eager" decoding="async">
+        <svg class="scene-motion" viewBox="0 0 1200 235" aria-hidden="true">
+          <defs>
+            <filter id="motionGlow">
+              <feGaussianBlur stdDeviation="4" result="blur"/>
+              <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+            </filter>
+          </defs>
+          <path class="motion-wire"
+                d="M165 114 C270 92 355 104 454 122 S650 124 742 121 S900 122 1060 138"/>
+          <g class="motion-pulses">
+            <circle cx="0" cy="0" r="5"/><circle cx="0" cy="0" r="5"/><circle cx="0" cy="0" r="5"/>
+            <circle cx="0" cy="0" r="5"/><circle cx="0" cy="0" r="5"/><circle cx="0" cy="0" r="5"/>
           </g>
-          <path d="M94 116 L106 96 L118 116 L106 136Z" fill="#ffd44e" stroke="#4f5f70" stroke-width="2"/>
-          <text x="106" y="111" text-anchor="middle" font-size="11" font-weight="900" fill="#253443">!</text>
-          <text x="95" y="178" text-anchor="middle" class="scene-label">ROZDZIELNICA GŁÓWNA</text>
-          <text x="95" y="194" text-anchor="middle" class="scene-sub">Skrzynia zabezpieczeń</text>
-        </g>
-
-        <path class="scene-wire-glow" d="M208 140 C275 125 352 122 430 146 S650 148 720 146 S920 145 1020 154"/>
-        <path class="scene-wire" d="M208 140 C275 125 352 122 430 146 S650 148 720 146 S920 145 1020 154"/>
-
-        <g class="scene-pulses">
-          ${pulse(0)}${pulse(.55)}${pulse(1.1)}${pulse(1.65)}${pulse(2.2)}${pulse(2.75)}
-        </g>
-
-        <g class="scene-caption">
-          <rect x="480" y="248" width="240" height="34" rx="17"/>
-          <circle cx="501" cy="265" r="5"/>
-          <text x="513" y="269">ANIMOWANY KIERUNEK ZASILANIA</text>
-        </g>
-      </svg>
+        </svg>
+        <div class="scene-vignette"></div>
+      </div>
 
       <div class="scene-bottom">
         <span><i class="flow-dot"></i>${active ? "Dzisiejsze zużycie wykryte" : "Brak dzisiejszego zużycia"}</span>
@@ -757,7 +670,27 @@ class TauronEnergyCard extends HTMLElement {
       .flow-live .scene-status{color:#71efad;border-color:rgba(39,220,132,.35)}
       .flow-live .scene-status i{background:#27dc84;box-shadow:0 0 12px rgba(39,220,132,.8);animation:sceneStatusPulse 1.8s ease-out infinite}
       @keyframes sceneStatusPulse{0%{transform:scale(.85);box-shadow:0 0 0 0 rgba(39,220,132,.35)}70%{transform:scale(1);box-shadow:0 0 0 8px rgba(39,220,132,0)}100%{box-shadow:0 0 0 0 rgba(39,220,132,0)}}
-      .scene-svg{display:block;width:100%;height:auto;min-height:270px;aspect-ratio:1200/310}
+      .scene-art{position:relative;aspect-ratio:1263/235;min-height:235px;overflow:hidden;background:
+        radial-gradient(circle at 30% 35%,rgba(20,94,160,.25),transparent 28%),linear-gradient(180deg,#07192d,#061a20)}
+      .scene-art img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;display:block}
+      .scene-motion{position:absolute;inset:0;width:100%;height:100%;overflow:visible;pointer-events:none}
+      .motion-wire{fill:none;stroke:#49c9ff;stroke-width:3;stroke-linecap:round;opacity:.25;filter:url(#motionGlow)}
+      .motion-pulses circle{fill:#c7f5ff;filter:url(#motionGlow);opacity:0}
+      .flow-live .motion-pulses circle{animation:scenePulseMove 3.2s linear infinite}
+      .flow-live .motion-pulses circle:nth-child(2){animation-delay:.53s}
+      .flow-live .motion-pulses circle:nth-child(3){animation-delay:1.06s}
+      .flow-live .motion-pulses circle:nth-child(4){animation-delay:1.59s}
+      .flow-live .motion-pulses circle:nth-child(5){animation-delay:2.12s}
+      .flow-live .motion-pulses circle:nth-child(6){animation-delay:2.65s}
+      @keyframes scenePulseMove{
+        0%{opacity:0;transform:translate(165px,114px) scale(.55)}
+        10%{opacity:1}82%{opacity:1}
+        100%{opacity:0;transform:translate(1060px,138px) scale(1.15)}
+      }
+      .scene-vignette{position:absolute;inset:0;pointer-events:none;background:
+        linear-gradient(90deg,rgba(2,11,20,.16),transparent 30%,transparent 70%,rgba(2,11,20,.16)),
+        linear-gradient(180deg,rgba(0,0,0,.18),transparent 32%,rgba(0,0,0,.14))}
+      .scene-svg{display:none}
       .scene-label{font-family:system-ui,sans-serif;fill:#edf7ff;font-size:11px;font-weight:900;letter-spacing:.08em}
       .scene-sub{font-family:system-ui,sans-serif;fill:#9ab3c8;font-size:8px;font-weight:600}
       .scene-wire{fill:none;stroke:url(#powerBeam);stroke-width:5;stroke-linecap:round;filter:url(#sceneGlow)}
@@ -879,7 +812,7 @@ class TauronEnergyCard extends HTMLElement {
       .budget-ring::before{content:"";position:absolute;inset:5px;background:#091a29;border-radius:50%}.budget-ring span{position:relative;font-size:9px;font-weight:900}
 
       @media(prefers-reduced-motion:reduce){
-        .flow-live .scene-status i,.scene-pulses .pulse,.spin{animation:none!important}
+        .flow-live .scene-status i,.scene-pulses .pulse,.motion-pulses circle,.spin{animation:none!important}
       }
       @media(max-width:1050px){
         .nav b{padding:9px 16px}.connection{min-width:170px}.kpi-grid{grid-template-columns:repeat(2,1fr)}
@@ -888,7 +821,7 @@ class TauronEnergyCard extends HTMLElement {
       @media(max-width:700px){
         .dashboard{padding:10px;border-radius:18px}.topbar{align-items:flex-start}.nav{display:none}.connection{min-width:0;padding:8px}.connection span{display:none}
         .brand{min-width:0}.brand-mark{width:42px;height:42px}.brand h1{font-size:18px}.brand h1 span{font-size:14px}
-        .scene-topbar{left:12px;right:12px;top:10px}.scene-topbar strong{font-size:10px}.scene-status{padding:6px 8px;font-size:8px}.scene-svg{min-height:245px}
+        .scene-topbar{left:12px;right:12px;top:10px}.scene-topbar strong{font-size:10px}.scene-status{padding:6px 8px;font-size:8px}.scene-art{min-height:190px}.scene-svg{min-height:0}
         .scene-bottom{align-items:flex-start;flex-direction:column}.kpi-grid{grid-template-columns:1fr 1fr}.kpi{min-height:135px;padding:13px}.kpi-value{font-size:24px}
         .zone-grid,.pse-grid{grid-template-columns:1fr}.info-grid{grid-template-columns:1fr}.footer{flex-direction:column}.chart-wrap{height:220px}
       }
