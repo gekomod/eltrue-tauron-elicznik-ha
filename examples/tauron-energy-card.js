@@ -420,6 +420,80 @@ class TauronEnergyCard extends HTMLElement {
     `;
   }
 
+  _energyFlowSvg(dailyConsumed) {
+    const active = Number.isFinite(dailyConsumed) && dailyConsumed > 0;
+    const status = active ? "Przepływ aktywny" : "Brak dzisiejszego poboru";
+    const statusClass = active ? "flow-live" : "flow-idle";
+
+    return `
+      <div class="energy-flow ${statusClass}">
+        <div class="flow-head">
+          <div>
+            <div class="flow-kicker">PRZEPŁYW ENERGII</div>
+            <strong>Sieć → instalacja</strong>
+            <span>Wizualizacja kierunku zasilania</span>
+          </div>
+          <div class="flow-status"><i></i>${status}</div>
+        </div>
+
+        <div class="flow-diagram" role="img" aria-label="Przepływ energii od słupa energetycznego przez skrzynię zabezpieczeń głównych do domu">
+          <div class="flow-node pole">
+            <div class="node-icon">
+              <svg viewBox="0 0 64 64" aria-hidden="true">
+                <path class="icon-stroke" d="M18 55L32 8l14 47M24 36h16M21 45h22M32 8v47M18 17h28"/>
+              </svg>
+            </div>
+            <b>Słup energetyczny</b>
+            <span>Sieć Tauron</span>
+          </div>
+
+          <div class="flow-track">
+            <div class="track-line"></div>
+            <div class="track-glow"></div>
+            <div class="flow-particles"><i></i><i></i><i></i><i></i><i></i></div>
+            <span class="flow-label">zasilanie</span>
+          </div>
+
+          <div class="flow-node fuse">
+            <div class="node-icon">
+              <svg viewBox="0 0 64 64" aria-hidden="true">
+                <rect class="icon-stroke" x="10" y="8" width="44" height="48" rx="7"/>
+                <path class="icon-stroke" d="M21 20h22M21 31h22M21 42h12M42 40v8M38 44h8"/>
+                <circle class="icon-dot" cx="39" cy="21" r="3"/>
+              </svg>
+            </div>
+            <b>Skrzynia zabezpieczeń</b>
+            <span>Rozdzielnia główna</span>
+          </div>
+
+          <div class="flow-track">
+            <div class="track-line"></div>
+            <div class="track-glow"></div>
+            <div class="flow-particles"><i></i><i></i><i></i><i></i><i></i></div>
+            <span class="flow-label">instalacja</span>
+          </div>
+
+          <div class="flow-node house">
+            <div class="node-icon">
+              <svg viewBox="0 0 64 64" aria-hidden="true">
+                <path class="icon-stroke" d="M8 29L32 10l24 19v27H8z"/>
+                <path class="icon-stroke" d="M25 56V39h14v17M16 31h32"/>
+                <path class="icon-stroke" d="M48 14v9"/>
+              </svg>
+            </div>
+            <b>Dom</b>
+            <span>Instalacja odbiorcza</span>
+          </div>
+        </div>
+
+        <div class="flow-foot">
+          <span><i class="flow-dot"></i> Animacja pokazuje kierunek przepływu</span>
+          <strong>${Number.isFinite(dailyConsumed) ? `Dzisiaj · ${this._fmt(dailyConsumed,2)} kWh` : "Brak danych dziennych"}</strong>
+        </div>
+      </div>
+    `;
+  }
+
   _chartSvg() {
     const chartHistory = this._chartHistorySeries();
     const consumed = chartHistory || this._dailySeries(this._config.consumed_entity);
@@ -636,6 +710,45 @@ class TauronEnergyCard extends HTMLElement {
         .context-head p{margin:4px 0 0;color:var(--te-muted);font-size:10px}
         .tariff-pill{border:1px solid #dce6f3;background:#f7faff;border-radius:12px;padding:9px 12px;color:var(--te-muted);font-size:9px}
         .tariff-pill span{margin-right:6px}.tariff-pill strong{font-size:18px;color:var(--te-blue)}
+        .energy-flow{margin:12px 0;padding:17px 18px;border:1px solid #dfe7f2;border-radius:17px;background:radial-gradient(circle at 50% -20%,rgba(79,124,255,.10),transparent 55%),linear-gradient(180deg,#fcfdff 0%,#f6f9fd 100%);box-shadow:0 8px 24px rgba(35,55,85,.055);overflow:hidden}
+        .flow-head{display:flex;align-items:center;justify-content:space-between;gap:14px;margin-bottom:15px}
+        .flow-head>div:first-child{display:flex;flex-direction:column;gap:3px}
+        .flow-kicker{font-size:8px;font-weight:900;letter-spacing:.12em;color:var(--te-blue)}
+        .flow-head strong{font-size:13px;color:var(--te-text)}
+        .flow-head span{font-size:9px;color:var(--te-muted)}
+        .flow-status{display:flex;align-items:center;gap:6px;padding:7px 10px;border-radius:99px;background:#f0f3f7;color:#7a8799;font-size:9px;font-weight:800;white-space:nowrap}
+        .flow-status i{width:7px;height:7px;border-radius:50%;background:#aab4c2;display:block}
+        .flow-live .flow-status{background:#eaf8f1;color:#23805d}
+        .flow-live .flow-status i{background:#32b47b;box-shadow:0 0 0 0 rgba(50,180,123,.35);animation:flowStatusPulse 1.8s ease-out infinite}
+        .flow-diagram{display:grid;grid-template-columns:minmax(120px,1fr) minmax(90px,1.4fr) minmax(150px,1.05fr) minmax(90px,1.4fr) minmax(120px,1fr);align-items:center;gap:10px;min-height:154px;padding:12px 2px}
+        .flow-node{position:relative;display:flex;flex-direction:column;align-items:center;text-align:center;z-index:2}
+        .node-icon{width:56px;height:56px;display:grid;place-items:center;border-radius:16px;background:#fff;border:1px solid #e3eaf3;box-shadow:0 8px 20px rgba(35,55,85,.08);transition:transform .25s ease,box-shadow .25s ease,border-color .25s ease}
+        .node-icon svg{width:36px;height:36px;overflow:visible}
+        .icon-stroke{fill:none;stroke:#4d6d97;stroke-width:2.4;stroke-linecap:round;stroke-linejoin:round}
+        .icon-dot{fill:#4f7cff}
+        .flow-node b{margin-top:9px;color:var(--te-text);font-size:10px}
+        .flow-node>span{margin-top:3px;color:var(--te-muted);font-size:8px}
+        .flow-track{position:relative;height:62px;display:flex;align-items:center;justify-content:center;min-width:0}
+        .track-line{height:3px;width:100%;border-radius:99px;background:linear-gradient(90deg,#d9e2ee,#bfcfe3,#d9e2ee);box-shadow:inset 0 0 0 1px rgba(65,95,135,.06)}
+        .track-glow{position:absolute;left:0;top:50%;width:100%;height:9px;transform:translateY(-50%);border-radius:99px;background:linear-gradient(90deg,transparent,rgba(79,124,255,.18),transparent);filter:blur(6px);opacity:.55}
+        .flow-particles{position:absolute;inset:0;display:flex;align-items:center;justify-content:space-between;padding:0 2px}
+        .flow-particles i{display:block;width:7px;height:7px;border-radius:50%;background:#4f7cff;box-shadow:0 0 9px rgba(79,124,255,.65);opacity:.15}
+        .flow-live .flow-particles i{animation:flowParticle 2.1s linear infinite}
+        .flow-live .flow-particles i:nth-child(2){animation-delay:.42s}
+        .flow-live .flow-particles i:nth-child(3){animation-delay:.84s}
+        .flow-live .flow-particles i:nth-child(4){animation-delay:1.26s}
+        .flow-live .flow-particles i:nth-child(5){animation-delay:1.68s}
+        .flow-label{position:absolute;top:calc(50% + 15px);font-size:7px;color:#94a1b3;text-transform:uppercase;letter-spacing:.08em}
+        .flow-live .node-icon{border-color:#d5e3ff;box-shadow:0 8px 22px rgba(79,124,255,.10)}
+        .flow-live .flow-node:hover .node-icon{transform:translateY(-3px);box-shadow:0 12px 28px rgba(79,124,255,.15)}
+        .flow-foot{display:flex;justify-content:space-between;align-items:center;gap:12px;margin-top:7px;padding-top:10px;border-top:1px solid #e9edf3;color:var(--te-muted);font-size:8px}
+        .flow-foot>span{display:flex;align-items:center;gap:5px}
+        .flow-foot strong{font-size:9px;color:var(--te-text)}
+        .flow-dot{width:6px;height:6px;border-radius:50%;background:#4f7cff;display:inline-block}
+        @keyframes flowParticle{0%{transform:translateX(0) scale(.75);opacity:.12}18%{opacity:.95}70%{opacity:.95}100%{transform:translateX(10px) scale(1);opacity:.12}}
+        @keyframes flowStatusPulse{0%{box-shadow:0 0 0 0 rgba(50,180,123,.32)}70%{box-shadow:0 0 0 8px rgba(50,180,123,0)}100%{box-shadow:0 0 0 0 rgba(50,180,123,0)}}
+        @keyframes flowParticleVertical{0%{transform:translateY(0) scale(.75);opacity:.12}18%{opacity:.95}70%{opacity:.95}100%{transform:translateY(10px) scale(1);opacity:.12}}
+        @media(prefers-reduced-motion:reduce){.flow-live .flow-particles i,.flow-live .flow-status i{animation:none!important}}
         .zones-panel{margin-top:12px;padding:16px 17px;border:1px solid #dfe7f2;border-radius:16px;background:linear-gradient(180deg,#fbfdff 0%,#f6f9fd 100%);box-shadow:0 6px 20px rgba(35,55,85,.045)}
         .zones-head{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:12px}
         .zones-head>div:first-child{display:flex;flex-direction:column;gap:3px}
@@ -719,7 +832,7 @@ class TauronEnergyCard extends HTMLElement {
         .wide-refresh{width:100%;margin-top:13px;min-height:40px;border-radius:10px;font-size:12px;font-weight:700}
         .footer{display:flex;justify-content:space-between;gap:12px;color:#8c98a9;font-size:9px;padding:3px 2px 0}
         @media(max-width:1050px){.hero-grid{grid-template-columns:1fr 1fr}.hero{grid-column:1/-1}.stat-grid{grid-template-columns:repeat(3,1fr)}}
-        @media(max-width:700px){.panel{padding:13px;border-radius:14px}.top{align-items:flex-start}.connection{display:none}.hero-grid,.details-grid,.pse-grid,.zones-grid{grid-template-columns:1fr}.hero{grid-column:auto;min-height:210px}.stat-grid{grid-template-columns:repeat(2,1fr)}.hero-meta{gap:18px}.footer{flex-direction:column}.chart-wrap{height:230px}.context-head{align-items:flex-start;flex-direction:column}.zone-box strong{font-size:18px}}
+        @media(max-width:700px){.panel{padding:13px;border-radius:14px}.top{align-items:flex-start}.connection{display:none}.hero-grid,.details-grid,.pse-grid,.zones-grid{grid-template-columns:1fr}.hero{grid-column:auto;min-height:210px}.stat-grid{grid-template-columns:repeat(2,1fr)}.hero-meta{gap:18px}.footer{flex-direction:column}.chart-wrap{height:230px}.context-head{align-items:flex-start;flex-direction:column}.zone-box strong{font-size:18px}.flow-head{align-items:flex-start;flex-direction:column}.flow-diagram{grid-template-columns:1fr;grid-template-rows:auto 58px auto 58px auto;gap:4px}.flow-track{height:58px}.flow-track .track-line{width:3px;height:100%;background:linear-gradient(180deg,#d9e2ee,#bfcfe3,#d9e2ee)}.flow-track .track-glow{width:9px;height:100%;left:50%;top:0;transform:translateX(-50%);background:linear-gradient(180deg,transparent,rgba(79,124,255,.18),transparent)}.flow-particles{flex-direction:column;padding:2px 0;left:50%;right:auto;top:0;bottom:0;transform:translateX(-50%)}.flow-live .flow-particles i{animation:flowParticleVertical 2.1s linear infinite}.flow-live .flow-particles i:nth-child(2){animation-delay:.42s}.flow-live .flow-particles i:nth-child(3){animation-delay:.84s}.flow-live .flow-particles i:nth-child(4){animation-delay:1.26s}.flow-live .flow-particles i:nth-child(5){animation-delay:1.68s}.flow-label{top:50%;left:calc(50% + 12px);transform:translateY(-50%)}.flow-foot{align-items:flex-start;flex-direction:column}.zones-head{align-items:flex-start}.zones-tariff{align-self:flex-start}}
       </style>
       <section class="panel" aria-label="Tauron eLicznik">
         <header class="top">
@@ -762,6 +875,8 @@ class TauronEnergyCard extends HTMLElement {
             <div style="color:var(--te-muted);font-size:11px">Bilans okresu</div>
           </div>
         </div>
+
+        ${this._energyFlowSvg(dailyConsumed)}
 
         <div class="zones-panel">
           <div class="zones-head">
