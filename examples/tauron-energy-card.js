@@ -26,9 +26,13 @@ class TauronEnergyCard extends HTMLElement {
       pse_today_entity: "sensor.serwerownia_tauron_elicznik_energetyczny_kompas_dzisiaj",
       pse_tomorrow_entity: "sensor.serwerownia_tauron_elicznik_energetyczny_kompas_jutro",
       title: "Energia",
-      days_history: 14,
+      days_history: 30,
       auto_refresh_minutes: 60,
-      power_entity: ""
+      power_entity: "",
+      cost_entity: "",
+      carbon_entity: "",
+      meter_number_entity: "",
+      flow_image_url: "/local/tauron-energy-flow-clean2.jpg"
     };
   }
 
@@ -423,7 +427,7 @@ class TauronEnergyCard extends HTMLElement {
 
   _energyFlowSvg(dailyConsumed){
     const active=Number.isFinite(dailyConsumed)&&dailyConsumed>0;
-    const imageUrl=this._config.flow_image_url||"/local/tauron-energy-flow.jpg";
+    const imageUrl=this._config.flow_image_url||"/local/tauron-energy-flow-clean2.jpg";
     const total=this._num(this._config.consumed_entity,NaN);
     const meter=Number.isFinite(total)?String(Math.round(total)).padStart(6,"0"):"------";
     const power=this._num(this._config.power_entity,NaN);
@@ -431,75 +435,45 @@ class TauronEnergyCard extends HTMLElement {
     const t2=this._num(this._config.t2_entity,NaN);
     const t3=this._num(this._config.t3_entity,NaN);
 
-    const a1="M164 116 C244 100 333 104 447 126";
-    const a2="M597 128 C647 125 690 126 736 124";
-    const a3="M910 124 C958 126 1004 146 1046 151";
-
-    const arrow=(path,delay)=>`
+    const a1="M166 91 C250 86 348 103 446 127";
+    const a2="M595 135 C646 136 688 131 735 128";
+    const a3="M910 130 C963 135 1008 157 1050 167";
+    const arrow=(path,delay)=>\`
       <g class="energy-arrow">
         <path d="M0 0 L16 9 L0 18"/>
-        <animateMotion dur="2.8s" begin="${delay}s" repeatCount="indefinite" rotate="auto" path="${path}"/>
-      </g>`;
+        <animateMotion dur="2.8s" begin="{{delay}}s" repeatCount="indefinite" rotate="auto" path="{{path}}"/>
+      </g>\`.replaceAll("{{",").replaceAll(}","}");
 
-    return `
-      <section class="scene ${active?"flow-live":"flow-idle"}" aria-label="Przepływ energii">
+    return \`
+      <section class="scene {{active?"flow-live":"flow-idle"}}" aria-label="Przepływ energii">
         <div class="scene-topbar">
           <div>
             <div class="scene-kicker">PRZEPŁYW ENERGII</div>
             <strong>Sieć → licznik → rozdzielnica → dom</strong>
             <span>Animowany kierunek przepływu</span>
           </div>
-          <div class="scene-status"><i></i>${active?"Przepływ aktywny":"Brak dzisiejszego poboru"}</div>
+          <div class="scene-status"><i></i>{{active?"Przepływ aktywny":"Brak dzisiejszego poboru"}}</div>
         </div>
-
         <div class="scene-art">
-          <img src="${this._escape(imageUrl)}" alt="Słup energetyczny, licznik MA309M, rozdzielnica główna i dom" loading="eager" decoding="async">
-
-          <svg class="scene-cover" viewBox="0 0 1250 233" preserveAspectRatio="none" aria-hidden="true">
-            <path d="${a1}"/><path d="${a2}"/><path d="${a3}"/>
-          </svg>
-
+          <img src="{{this._escape(imageUrl)}}" alt="Słup energetyczny, licznik MA309M, rozdzielnica główna i dom" loading="eager" decoding="async">
           <svg class="scene-motion" viewBox="0 0 1250 233" preserveAspectRatio="none" aria-hidden="true">
-            <defs>
-              <filter id="sceneArrowGlow">
-                <feGaussianBlur stdDeviation="3.5" result="blur"/>
-                <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
-              </filter>
-            </defs>
-            <path class="scene-motion-line" d="${a1}"/>
-            <path class="scene-motion-line" d="${a2}"/>
-            <path class="scene-motion-line" d="${a3}"/>
-            <g class="scene-arrows">
-              ${arrow(a1,0)}
-              ${arrow(a1,.47)}
-              ${arrow(a2,.94)}
-              ${arrow(a2,1.41)}
-              ${arrow(a3,1.88)}
-              ${arrow(a3,2.35)}
-            </g>
+            <defs><filter id="sceneArrowGlow"><feGaussianBlur stdDeviation="3.2" result="blur"/><feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge></filter></defs>
+            <path class="scene-motion-line" d="{{a1}}"/><path class="scene-motion-line" d="{{a2}}"/><path class="scene-motion-line" d="{{a3}}"/>
+            <g class="scene-arrows">{{arrow(a1,0)}}{{arrow(a1,.47)}}{{arrow(a2,.94)}}{{arrow(a2,1.41)}}{{arrow(a3,1.88)}}{{arrow(a3,2.35)}}</g>
           </svg>
-
-          <div class="scene-meter-live" aria-label="Stan licznika z Home Assistant">
-            <strong>${meter}</strong><span>kWh</span>
-          </div>
-
+          <div class="scene-meter-live" aria-label="Rzeczywisty stan licznika z Home Assistant"><strong>{{meter}}</strong><span>kWh</span></div>
           <div class="scene-data-strip">
-            <span><b>Pobór dzisiaj</b> ${Number.isFinite(dailyConsumed)?this._fmt(dailyConsumed,2):"—"} kWh</span>
-            ${Number.isFinite(power)?`<span><b>Moc chwilowa</b> ${this._fmt(power,0)} W</span>`:"<span><b>Moc chwilowa</b> —</span>"}
-            ${Number.isFinite(t1)?`<span><b>T1</b> ${this._fmt(t1,0)} kWh</span>`:""}
-            ${Number.isFinite(t2)?`<span><b>T2</b> ${this._fmt(t2,0)} kWh</span>`:""}
-            ${Number.isFinite(t3)?`<span><b>T3</b> ${this._fmt(t3,0)} kWh</span>`:""}
+            <span><b>Pobór dzisiaj</b> {{Number.isFinite(dailyConsumed)?this._fmt(dailyConsumed,2):"—"}} kWh</span>
+            {{Number.isFinite(power)?\`<span><b>Moc chwilowa</b> {{this._fmt(power,0)}} W</span>\`:"<span><b>Moc chwilowa</b> —</span>"}}
+            {{Number.isFinite(t1)?\`<span><b>T1</b> {{this._fmt(t1,0)}} kWh</span>\`:""}}
+            {{Number.isFinite(t2)?\`<span><b>T2</b> {{this._fmt(t2,0)}} kWh</span>\`:""}}
+            {{Number.isFinite(t3)?\`<span><b>T3</b> {{this._fmt(t3,0)}} kWh</span>\`:""}}
           </div>
-
           <div class="scene-vignette" aria-hidden="true"></div>
         </div>
-
-        <div class="scene-bottom">
-          <span><i class="flow-dot"></i>${active?"Animowany przepływ aktywny":"Brak dzisiejszego poboru"} · dane z Home Assistant</span>
-          <strong>${Number.isFinite(dailyConsumed)?`Dzisiaj · ${this._fmt(dailyConsumed,2)} kWh`:"Brak danych dziennych"}</strong>
-        </div>
+        <div class="scene-bottom"><span><i class="flow-dot"></i>{{active?"Animowany przepływ aktywny":"Brak dzisiejszego poboru"}} · dane rzeczywiste z Home Assistant</span><strong>{{Number.isFinite(dailyConsumed)?\`Dzisiaj · {{this._fmt(dailyConsumed,2)}} kWh\`:"Brak danych dziennych"}}</strong></div>
       </section>
-    `;
+    \`.replaceAll("{{",").replaceAll(}","}");
   }
   _chartSvg() {
     const chartHistory = this._chartHistorySeries();
@@ -613,8 +587,6 @@ class TauronEnergyCard extends HTMLElement {
     : 0;
   const daysPercent = Number.isFinite(days) ? Math.max(0, Math.min(100, (days / 365) * 100)) : 0;
 
-  const elapsedHours = Math.max(1, new Date().getHours() + new Date().getMinutes() / 60);
-  const avgPower = Number.isFinite(dailyConsumed) ? (dailyConsumed / elapsedHours) * 1000 : NaN;
   const fmtPower = value => Number.isFinite(value)
     ? `${this._fmt(value,0)} W`
     : "—";
@@ -703,7 +675,7 @@ class TauronEnergyCard extends HTMLElement {
       .scene-arrows{display:none}.flow-live .scene-arrows{display:block}
       .energy-arrow{opacity:0}.flow-live .energy-arrow{opacity:1}
       .energy-arrow path{fill:none;stroke:#d8fbff;stroke-width:3.2;stroke-linecap:round;stroke-linejoin:round;filter:url(#sceneArrowGlow)}
-      .scene-meter-live{position:absolute;z-index:5;left:38.05%;top:41.3%;width:6.8%;height:12.4%;display:flex;align-items:center;justify-content:center;flex-direction:column;background:linear-gradient(180deg,rgba(238,250,255,.98),rgba(207,237,242,.97));border:1px solid rgba(54,93,112,.68);border-radius:7px;box-shadow:0 0 10px rgba(58,205,255,.18);color:#132b3a;line-height:1}
+      .scene-meter-live{position:absolute;z-index:5;left:38.1%;top:39.5%;width:6.1%;height:17%;display:flex;align-items:center;justify-content:center;flex-direction:column;background:linear-gradient(180deg,rgba(238,250,255,.98),rgba(207,237,242,.97));border:1px solid rgba(54,93,112,.68);border-radius:7px;box-shadow:0 0 10px rgba(58,205,255,.18);color:#132b3a;line-height:1}
       .scene-meter-live strong{font:800 clamp(7px,1vw,15px)/1 monospace;letter-spacing:.02em}.scene-meter-live span{margin-top:2px;font:800 clamp(4px,.4vw,7px)/1 system-ui;color:#516b79}
       .scene-data-strip{position:absolute;z-index:6;left:50%;bottom:8%;transform:translateX(-50%);display:flex;align-items:center;justify-content:center;gap:7px;max-width:94%;padding:5px 8px;border:1px solid rgba(111,193,231,.3);border-radius:999px;background:rgba(3,18,29,.72);backdrop-filter:blur(6px);box-shadow:0 5px 16px rgba(0,0,0,.24);color:#c4d9e6;font-size:7px;white-space:nowrap}
       .scene-data-strip span{padding:0 5px;border-right:1px solid rgba(142,191,216,.2)}.scene-data-strip span:last-child{border-right:0}.scene-data-strip b{color:#f0f8fc;margin-right:2px}
@@ -858,8 +830,8 @@ class TauronEnergyCard extends HTMLElement {
 
         <article class="kpi">
           <div class="kpi-top"><div class="kpi-icon">⚡</div><span class="kpi-label">Moc chwilowa</span></div>
-          <div class="kpi-value">${Number.isFinite(power) ? fmtPower(power) : "—"}</div>
-          <div class="kpi-sub">${Number.isFinite(power) ? "odczyt chwilowy z licznika" : "Brak odczytu mocy chwilowej z HAN"}${Number.isFinite(avgPower) ? `<span>Średnia dzisiaj · ${fmtPower(avgPower)}</span>` : ""}</div>
+          <div class="kpi-value">${Number.isFinite(power) ? this._fmt(power,0) : "—"} <small>W</small></div>
+          <div class="kpi-sub">${Number.isFinite(power) ? "Odczyt chwilowy z HAN" : "Brak encji mocy chwilowej"}</div>
           <div class="mini-trend">
             <svg viewBox="0 0 220 40" preserveAspectRatio="none" aria-hidden="true">
               <polyline class="mini-line" points="0,30 16,24 31,28 47,18 63,23 79,14 95,20 111,9 127,18 143,12 159,20 175,10 191,16 207,6 220,10"/>
