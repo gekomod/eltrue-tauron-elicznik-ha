@@ -476,63 +476,76 @@ class TauronEnergyCard extends HTMLElement {
     \`.replaceAll("{{",").replaceAll(}","}");
   }
   _chartSvg() {
-    const chartHistory = this._chartHistorySeries();
-    const consumed = chartHistory || this._dailySeries(this._config.consumed_entity);
-    const exported = this._dailySeries(this._config.exported_entity);
-    const all = [...consumed.map(x => x.value), ...exported.map(x => x.value)];
-    const max = Math.max(1, ...all) * 1.15;
+    const history=this._chartHistorySeries()||[];
+    const entry=this._selectedHistoryEntry();
+    const values=Array.isArray(entry?.values)?entry.values.map(Number):[];
+    const valid=values.filter(Number.isFinite);
+    if(!valid.length){
+      return \`
+        <div class="chart-empty"><strong>Brak profilu godzinowego</strong><span>Oczekiwanie na dane godzinowe z /energia/api.</span></div>
+      \`;
+    }
 
-    const W = 900, H = 280;
-    const left = 46, right = 18, top = 22, bottom = 42;
-    const plotW = W - left - right, plotH = H - top - bottom;
+    const W=900,H=255,left=48,right=16,top=42,bottom=34;
+    const plotW=W-left-right,plotH=H-top-bottom;
+    const max=Math.max(1,...valid)*1.16;
+    const slot=plotW/values.length;
+    const barW=Math.max(8,slot-5);
 
-    const path = data => data.map((p, i) => {
-      const x = left + (i / Math.max(1, data.length - 1)) * plotW;
-      const y = top + plotH - (p.value / max) * plotH;
-      return `${i ? "L" : "M"} ${x.toFixed(1)} ${y.toFixed(1)}`;
-    }).join(" ");
+    const zoneForHour=hour=>{
+      if(hour>=6&&hour<13)return{cls:"bar-t1",name:"T1"};
+      if(hour>=13&&hour<15)return{cls:"bar-t2",name:"T2"};
+      return{cls:"bar-t3",name:"T3"};
+    };
 
-    const points = (data, cls, kind) => data.map((p, i) => {
-      const x = left + (i / Math.max(1, data.length - 1)) * plotW;
-      const y = top + plotH - (p.value / max) * plotH;
-      return `<circle class="chart-point ${cls}" data-kind="${kind}" data-label="${this._escape(p.label)}" data-value="${p.value}" cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="5"></circle>`;
+    const bars=values.map((value,i)=>{
+      if(!Number.isFinite(value))return"";
+      const x=left+i*slot+(slot-barW)/2;
+      const h=Math.max(2,(value/max)*plotH);
+      const y=top+plotH-h;
+      const zone=zoneForHour(i);
+      return \`<g class="hourbar" tabindex="0" data-kind="Pobór" data-label="{{String(i).padStart(2,"0")}}:00" data-value="{{value}}">
+        <rect class="{{zone.cls}}" x="{{x.toFixed(1)}}" y="{{y.toFixed(1)}}" width="{{barW.toFixed(1)}}" height="{{h.toFixed(1)}}" rx="4"/>
+        <title>{{String(i).padStart(2,"0")}}:00 · {{zone.name}} · {{this._fmt(value,2)}} kWh</title>
+      </g>\`;
     }).join("");
 
-    const grid = [0, .25, .5, .75, 1].map(r => {
-      const y = top + plotH - r * plotH;
-      const value = max * r;
-      return `<line class="grid" x1="${left}" y1="${y}" x2="${W-right}" y2="${y}"></line>
-        <text class="y-axis" x="${left-10}" y="${y+4}" text-anchor="end">${this._fmt(value,1)}</text>`;
+    const grid=[0,.25,.5,.75,1].map(r=>{
+      const y=top+plotH-r*plotH;
+      return \`<line class="chart-grid" x1="{{left}}" y1="{{y}}" x2="{{W-right}}" y2="{{y}}"/>
+        <text class="chart-axis-y" x="{{left-8}}" y="{{y+4}}" text-anchor="end">{{this._fmt(max*r,1)}}</text>\`;
     }).join("");
 
-    const labels = consumed.map((p, i) => {
-      if (consumed.length > 8 && i % 2 !== 0) return "";
-      const x = left + (i / Math.max(1, consumed.length - 1)) * plotW;
-      return `<text class="axis" x="${x}" y="${H-12}" text-anchor="middle">${p.label}</text>`;
+    const labels=values.map((_,i)=>{
+      if(values.length>12&&i%2!==0)return"";
+      const x=left+i*slot+slot/2;
+      return \`<text class="chart-axis-x" x="{{x.toFixed(1)}}" y="{{H-10}}" text-anchor="middle">{{String(i).padStart(2,"0")}}</text>\`;
     }).join("");
 
-    return `
-      <div class="chart-wrap">
-        <svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" role="img" aria-label="Zużycie energii z ostatnich dni">
-          <defs>
-            <linearGradient id="energyFill" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0%" stop-color="#4f7cff" stop-opacity=".22"></stop>
-              <stop offset="100%" stop-color="#4f7cff" stop-opacity=".02"></stop>
-            </linearGradient>
-          </defs>
-          ${grid}
-          <path class="area-consumed" d="${path(consumed)} L ${W-right} ${top+plotH} L ${left} ${top+plotH} Z"></path>
-          <path class="line-consumed" d="${path(consumed)}"></path>
-          <path class="line-exported" d="${path(exported)}"></path>
-          ${points(consumed, "dot-consumed", "Pobór")}
-          ${points(exported, "dot-exported", "Oddanie")}
-          ${labels}
+    const idx=history.findIndex(x=>x.date===entry?.date);
+    const previous=idx>0?Number(history[idx-1]?.value):NaN;
+    const delta=Number.isFinite(entry?.value)&&Number.isFinite(previous)&&previous>0
+      ?((entry.value-previous)/previous)*100:NaN;
+
+    return \`
+      <div class="chart-inner">
+        <div class="chart-summary">
+          <div><strong>{{Number.isFinite(entry?.value)?this._fmt(entry.value,1):"—"}} kWh</strong>
+          <span>{{this._dateLabel(entry?.date||this._selectedDate)}}</span>
+          {{Number.isFinite(delta)?\`<em class="{{delta<=0?"down":"up"}}">{{delta<=0?"↓":"↑"}} {{this._fmt(Math.abs(delta),0)}}%</em>\`:""}}</div>
+          <div class="chart-tabs" role="tablist" aria-label="Zakres">
+            <button class="chart-tab active" type="button">Dzień</button>
+            <button class="chart-tab" type="button">Tydzień</button>
+            <button class="chart-tab" type="button">Miesiąc</button>
+          </div>
+        </div>
+        <svg viewBox="0 0 {{W}} {{H}}" preserveAspectRatio="none" role="img" aria-label="Godzinowe zużycie energii">
+          {{grid}}{{bars}}{{labels}}
         </svg>
-        <div class="chart-tooltip" hidden></div>
+        <div class="chart-legend"><span><i class="legend-blue"></i>T1</span><span><i class="legend-orange"></i>T2</span><span><i class="legend-purple"></i>T3</span></div>
       </div>
-    `;
+    \`.replaceAll("{{",").replaceAll(}","}");
   }
-
   async _refresh() {
     const entity = this._config.refresh_entity;
     if (!this._hass || !entity || this._loading) return;
@@ -894,9 +907,10 @@ class TauronEnergyCard extends HTMLElement {
         </section>
       </div>
 
+
       <section class="panel-card context">
         <div class="card-head">
-          <div><strong>Energetyczny Kompas</strong><span>Prognoza na podstawie danych PSE</span></div>
+          <div><strong>Energetyczny Kompas</strong><span>Prognoza na podstawie historii zużycia i taryfy ${this._escape(String(tariff))}</span></div>
           <div class="pill">Taryfa ${this._escape(String(tariff))}</div>
         </div>
         <div class="pse-grid">
@@ -935,15 +949,6 @@ class TauronEnergyCard extends HTMLElement {
         </section>
       </div>
 
-      <section class="panel-card" style="margin-top:12px">
-        <div class="card-head"><div><strong>Okres rozliczeniowy</strong><span>Budżet i stan początkowy</span></div><div class="pill">${Number.isFinite(days) ? this._fmt(days,0) + " dni" : "—"}</div></div>
-        <div class="info-grid">
-          <div class="info"><div class="info-label">Dzienny budżet</div><div class="info-value">${Number.isFinite(dailyBudget) ? this._fmt(dailyBudget,2) : "—"} kWh</div></div>
-          <div class="info"><div class="info-label">Miesięczny budżet</div><div class="info-value">${Number.isFinite(monthlyBudget) ? this._fmt(monthlyBudget,2) : "—"} kWh</div></div>
-          <div class="info"><div class="info-label">Początek okresu · pobór</div><div class="info-value">${Number.isFinite(billingStartConsumed) ? this._fmt(billingStartConsumed,1) : "—"} kWh</div></div>
-          <div class="info"><div class="info-label">Początek okresu · oddanie</div><div class="info-value">${Number.isFinite(billingStartExported) ? this._fmt(billingStartExported,1) : "—"} kWh</div></div>
-        </div>
-      </section>
 
       <footer class="footer">
         <span>Źródło dzisiaj: /odczyty/api · historia: /energia/api · PSE: Energetyczny Kompas</span>
