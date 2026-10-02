@@ -420,7 +420,7 @@ class TauronEnergyCard extends HTMLElement {
     `;
   }
 
-  _energyFlowSvg(dailyConsumed) {
+  _energyFlowSvg(dailyConsumed){
   const active=Number.isFinite(dailyConsumed)&&dailyConsumed>0;
   const imageUrl=this._config.flow_image_url||"/local/tauron-energy-flow.jpg";
   const total=this._num(this._config.consumed_entity,NaN);
@@ -429,6 +429,16 @@ class TauronEnergyCard extends HTMLElement {
   const t2=this._num(this._config.t2_entity,NaN);
   const t3=this._num(this._config.t3_entity,NaN);
   const power=this._num(this._config.power_entity,NaN);
+
+  const arrow=(path,delay)=>`
+    <g class="energy-arrow">
+      <path d="M0 0 L16 9 L0 18"/>
+      <animateMotion dur="2.7s" begin="${delay}s" repeatCount="indefinite" rotate="auto" path="${path}"/>
+    </g>`;
+
+  const p1="M164 116 C244 100 333 104 447 126";
+  const p2="M597 128 C647 125 690 126 736 124";
+  const p3="M910 124 C958 126 1004 146 1046 151";
 
   return `
     <section class="scene ${active?"flow-live":"flow-idle"}" aria-label="Przepływ energii">
@@ -443,24 +453,20 @@ class TauronEnergyCard extends HTMLElement {
 
       <div class="scene-art">
         <img src="${this._escape(imageUrl)}" alt="Słup energetyczny, licznik MA309M, rozdzielnica główna i dom" loading="eager" decoding="async">
-
-        <!-- Tylko warstwa animacji nad gotowym obrazem; scena nie jest rysowana przez SVG. -->
         <svg class="scene-motion" viewBox="0 0 1250 233" preserveAspectRatio="none" aria-hidden="true">
           <defs>
-            <filter id="sceneArrowGlow">
-              <feGaussianBlur stdDeviation="3.5" result="b"/>
-              <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
-            </filter>
+            <filter id="sceneArrowGlow"><feGaussianBlur stdDeviation="3.5" result="blur"/><feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
           </defs>
-          <path class="scene-motion-path"
-                d="M164 116 C244 99 327 103 435 125 M594 128 C642 125 681 126 734 124 M911 124 C960 126 1001 146 1044 151"/>
+          <path class="scene-motion-line" d="${p1}"/>
+          <path class="scene-motion-line" d="${p2}"/>
+          <path class="scene-motion-line" d="${p3}"/>
           <g class="scene-arrows">
-            <g><path d="M0 0 L15 8 L0 16" /></g>
-            <g><path d="M0 0 L15 8 L0 16" /></g>
-            <g><path d="M0 0 L15 8 L0 16" /></g>
-            <g><path d="M0 0 L15 8 L0 16" /></g>
-            <g><path d="M0 0 L15 8 L0 16" /></g>
-            <g><path d="M0 0 L15 8 L0 16" /></g>
+            ${arrow(p1,0)}
+            ${arrow(p1,.45)}
+            ${arrow(p2,.9)}
+            ${arrow(p2,1.35)}
+            ${arrow(p3,1.8)}
+            ${arrow(p3,2.25)}
           </g>
         </svg>
 
@@ -475,12 +481,11 @@ class TauronEnergyCard extends HTMLElement {
           ${Number.isFinite(t2)?`<span><b>T2</b> ${this._fmt(t2,0)} kWh</span>`:""}
           ${Number.isFinite(t3)?`<span><b>T3</b> ${this._fmt(t3,0)} kWh</span>`:""}
         </div>
-
         <div class="scene-vignette" aria-hidden="true"></div>
       </div>
 
       <div class="scene-bottom">
-        <span><i class="flow-dot"></i>Animacja kierunku zasilania · dane z Home Assistant</span>
+        <span><i class="flow-dot"></i>Animowane strzałki · dane rzeczywiste z Home Assistant</span>
         <strong>${Number.isFinite(dailyConsumed)?`Dzisiaj · ${this._fmt(dailyConsumed,2)} kWh`:"Brak danych dziennych"}</strong>
       </div>
     </section>
@@ -672,39 +677,27 @@ class TauronEnergyCard extends HTMLElement {
       @keyframes spin{to{transform:rotate(360deg)}}
 
       .scene{position:relative;margin-bottom:14px;overflow:hidden;border:1px solid #173b55;border-radius:18px;background:#061624;box-shadow:0 14px 40px rgba(0,0,0,.22)}
-      .scene-topbar{position:absolute;z-index:5;left:18px;right:18px;top:14px;display:flex;justify-content:space-between;gap:12px;align-items:flex-start;text-shadow:0 2px 12px rgba(0,0,0,.7)}
+      .scene-topbar{position:absolute;z-index:6;left:18px;right:18px;top:14px;display:flex;justify-content:space-between;gap:12px;align-items:flex-start;text-shadow:0 2px 12px rgba(0,0,0,.7)}
       .scene-topbar>div:first-child{display:flex;flex-direction:column;gap:2px}
-      .scene-kicker{font-size:8px;font-weight:900;letter-spacing:.15em;color:#6dd7ff}
-      .scene-topbar strong{font-size:13px;color:#eef9ff}.scene-topbar span{font-size:8px;color:#b2c8dc}
+      .scene-kicker{font-size:8px;font-weight:900;letter-spacing:.15em;color:#6dd7ff}.scene-topbar strong{font-size:13px;color:#eef9ff}.scene-topbar span{font-size:8px;color:#b2c8dc}
       .scene-status{display:flex;align-items:center;gap:7px;padding:7px 10px;border-radius:999px;background:rgba(3,17,28,.78);border:1px solid rgba(87,145,180,.35);font-size:9px;font-weight:800;white-space:nowrap}
-      .scene-status i{width:7px;height:7px;border-radius:50%;background:#a8b9c8}
-      .flow-live .scene-status{color:#71efad;border-color:rgba(39,220,132,.35)}
+      .scene-status i{width:7px;height:7px;border-radius:50%;background:#a8b9c8}.flow-live .scene-status{color:#71efad;border-color:rgba(39,220,132,.35)}
       .flow-live .scene-status i{background:#27dc84;box-shadow:0 0 12px rgba(39,220,132,.8);animation:sceneStatusPulse 1.8s ease-out infinite}
       @keyframes sceneStatusPulse{0%{transform:scale(.85);box-shadow:0 0 0 0 rgba(39,220,132,.35)}70%{transform:scale(1);box-shadow:0 0 0 8px rgba(39,220,132,0)}100%{box-shadow:0 0 0 0 rgba(39,220,132,0)}}
       .scene-art{position:relative;width:100%;aspect-ratio:1250/233;overflow:hidden;background:#061624}
       .scene-art img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;object-position:center;display:block}
-      .scene-vignette{position:absolute;inset:0;pointer-events:none;background:linear-gradient(90deg,rgba(2,11,20,.08),transparent 25%,transparent 75%,rgba(2,11,20,.08)),linear-gradient(180deg,rgba(0,0,0,.08),transparent 35%,rgba(0,0,0,.10))}
-      .scene-motion{position:absolute;inset:0;z-index:3;width:100%;height:100%;pointer-events:none;overflow:hidden}
-      .scene-motion-path{fill:none;stroke:#4ccfff;stroke-opacity:.11;stroke-width:3;filter:url(#sceneArrowGlow)}
-      .scene-arrows{display:none}
-      .flow-live .scene-arrows{display:block}
-      .scene-arrows g{opacity:0;transform-box:fill-box;transform-origin:center;animation:sceneArrowTravel 3.2s linear infinite}
-      .scene-arrows g path{fill:none;stroke:#d2f8ff;stroke-width:3.2;stroke-linecap:round;stroke-linejoin:round;filter:url(#sceneArrowGlow)}
-      .scene-arrows g:nth-child(1){animation-delay:0s}.scene-arrows g:nth-child(2){animation-delay:.53s}.scene-arrows g:nth-child(3){animation-delay:1.06s}
-      .scene-arrows g:nth-child(4){animation-delay:1.59s}.scene-arrows g:nth-child(5){animation-delay:2.12s}.scene-arrows g:nth-child(6){animation-delay:2.65s}
-      @keyframes sceneArrowTravel{
-        0%{opacity:0;offset-distance:0%;transform:translate(164px,116px) scale(.8)}
-        8%{opacity:1}86%{opacity:1}
-        100%{opacity:0;transform:translate(1044px,151px) scale(1.08)}
-      }
-      .scene-meter-live{position:absolute;z-index:4;left:38.15%;top:30.5%;width:8.2%;height:18.5%;display:flex;align-items:center;justify-content:center;flex-direction:column;background:linear-gradient(180deg,rgba(238,250,255,.97),rgba(207,237,242,.96));border:1px solid rgba(54,93,112,.62);border-radius:7px;box-shadow:0 0 10px rgba(58,205,255,.15);color:#132b3a;line-height:1}
+      .scene-motion{position:absolute;inset:0;z-index:4;width:100%;height:100%;display:block;pointer-events:none;overflow:hidden}
+      .scene-motion-line{fill:none;stroke:#58d7ff;stroke-width:3.5;stroke-linecap:round;opacity:.18;filter:url(#sceneArrowGlow)}
+      .scene-arrows{display:none}.flow-live .scene-arrows{display:block}
+      .energy-arrow{opacity:0}.flow-live .energy-arrow{opacity:1}
+      .energy-arrow path{fill:none;stroke:#d7fbff;stroke-width:3.4;stroke-linecap:round;stroke-linejoin:round;filter:url(#sceneArrowGlow)}
+      .scene-meter-live{position:absolute;z-index:5;left:37.7%;top:31%;width:8.6%;height:21%;display:flex;align-items:center;justify-content:center;flex-direction:column;background:linear-gradient(180deg,rgba(238,250,255,.98),rgba(207,237,242,.97));border:1px solid rgba(54,93,112,.68);border-radius:7px;box-shadow:0 0 10px rgba(58,205,255,.18);color:#132b3a;line-height:1}
       .scene-meter-live strong{font:800 clamp(11px,1.65vw,24px)/1 monospace;letter-spacing:.03em}.scene-meter-live span{margin-top:3px;font:800 clamp(5px,.55vw,8px)/1 system-ui;color:#516b79}
-      .scene-data-strip{position:absolute;z-index:5;left:50%;bottom:9%;transform:translateX(-50%);display:flex;align-items:center;justify-content:center;gap:7px;max-width:94%;padding:5px 8px;border:1px solid rgba(111,193,231,.28);border-radius:999px;background:rgba(3,18,29,.68);backdrop-filter:blur(5px);box-shadow:0 5px 16px rgba(0,0,0,.22);color:#bcd2e0;font-size:7px;white-space:nowrap}
-      .scene-data-strip span{padding:0 5px;border-right:1px solid rgba(142,191,216,.18)}.scene-data-strip span:last-child{border-right:0}.scene-data-strip b{color:#e6f6ff;margin-right:2px}
-      .scene-bottom{position:relative;z-index:5;display:flex;align-items:center;justify-content:space-between;gap:12px;padding:9px 14px;border-top:1px solid #17384e;background:rgba(5,19,30,.94);font-size:8px;color:#91aabd}
-      .scene-bottom span{display:flex;align-items:center;gap:6px}.scene-bottom strong{color:#e8f5ff;font-size:9px}
-      .flow-dot{display:inline-block;width:6px;height:6px;border-radius:50%;background:#36d8ff;box-shadow:0 0 8px rgba(54,216,255,.65)}
-
+      .scene-data-strip{position:absolute;z-index:6;left:50%;bottom:8%;transform:translateX(-50%);display:flex;align-items:center;justify-content:center;gap:7px;max-width:94%;padding:5px 8px;border:1px solid rgba(111,193,231,.3);border-radius:999px;background:rgba(3,18,29,.72);backdrop-filter:blur(6px);box-shadow:0 5px 16px rgba(0,0,0,.24);color:#c4d9e6;font-size:7px;white-space:nowrap}
+      .scene-data-strip span{padding:0 5px;border-right:1px solid rgba(142,191,216,.2)}.scene-data-strip span:last-child{border-right:0}.scene-data-strip b{color:#f0f8fc;margin-right:2px}
+      .scene-vignette{position:absolute;z-index:2;inset:0;pointer-events:none;background:linear-gradient(90deg,rgba(2,11,20,.08),transparent 24%,transparent 76%,rgba(2,11,20,.08)),linear-gradient(180deg,rgba(0,0,0,.07),transparent 35%,rgba(0,0,0,.10))}
+      .scene-bottom{position:relative;z-index:6;display:flex;align-items:center;justify-content:space-between;gap:12px;padding:9px 14px;border-top:1px solid #17384e;background:#06131e;font-size:8px;color:#91aabd}
+      .scene-bottom span{display:flex;align-items:center;gap:6px}.scene-bottom strong{color:#e8f5ff;font-size:9px}.flow-dot{display:inline-block;width:6px;height:6px;border-radius:50%;background:#36d8ff;box-shadow:0 0 8px rgba(54,216,255,.65)}
       .kpi-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;margin-bottom:14px}
       .kpi{
         min-height:150px;padding:16px;border-radius:16px;border:1px solid #17354b;
@@ -798,7 +791,7 @@ class TauronEnergyCard extends HTMLElement {
       .budget-ring::before{content:"";position:absolute;inset:5px;background:#091a29;border-radius:50%}.budget-ring span{position:relative;font-size:9px;font-weight:900}
 
       @media(prefers-reduced-motion:reduce){
-        .flow-live .scene-status i,.scene-pulses .pulse,.motion-pulses circle,.scene-arrows g,.scene-shine,.spin{animation:none!important}
+        .flow-live .scene-status i,.scene-pulses .pulse,.motion-pulses circle,.scene-arrows .energy-arrow,.scene-shine,.spin{animation:none!important}
       }
       @media(max-width:1050px){
         .nav b{padding:9px 16px}.connection{min-width:170px}.kpi-grid{grid-template-columns:repeat(2,1fr)}
@@ -807,7 +800,7 @@ class TauronEnergyCard extends HTMLElement {
       @media(max-width:700px){
         .dashboard{padding:10px;border-radius:18px}.topbar{align-items:flex-start}.nav{display:none}.connection{min-width:0;padding:8px}.connection span{display:none}
         .brand{min-width:0}.brand-mark{width:42px;height:42px}.brand h1{font-size:18px}.brand h1 span{font-size:14px}
-        .scene-topbar{left:12px;right:12px;top:10px}.scene-topbar strong{font-size:10px}.scene-status{padding:6px 8px;font-size:8px}.scene-art{min-height:0}.scene-data-strip{bottom:7%;gap:3px;padding:4px 5px;font-size:5.5px}.scene-data-strip span{padding:0 3px}
+        .scene-topbar{left:12px;right:12px;top:10px}.scene-topbar strong{font-size:10px}.scene-status{padding:6px 8px;font-size:8px}.scene-art{min-height:0}.scene-data-strip{bottom:6%;gap:2px;padding:4px 5px;font-size:5.2px}.scene-data-strip span{padding:0 3px}.scene-meter-live{top:30%;height:22%}
         .scene-bottom{align-items:flex-start;flex-direction:column}.kpi-grid{grid-template-columns:1fr 1fr}.kpi{min-height:135px;padding:13px}.kpi-value{font-size:24px}
         .zone-grid,.pse-grid{grid-template-columns:1fr}.info-grid{grid-template-columns:1fr}.footer{flex-direction:column}.chart-wrap{height:220px}
       }
