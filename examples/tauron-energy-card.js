@@ -1,480 +1,453 @@
-// Tauron eLicznik card — Chart API history + current-day meter reading
-class TauronEnergyCard extends HTMLElement {
-  static getStubConfig() {
-    return {
-      consumed_entity: "sensor.serwerownia_tauron_elicznik_energia_pobrana",
-      exported_entity: "sensor.serwerownia_tauron_elicznik_energia_oddana",
-      daily_consumed_entity: "sensor.serwerownia_tauron_elicznik_dzienne_zuzycie_energii_chart_api",
-      daily_exported_entity: "sensor.serwerownia_tauron_elicznik_dzienne_oddanie_energii_chart_api",
-      daily_average_entity: "sensor.serwerownia_tauron_elicznik_srednie_zuzycie_dzienne",
-      balance_entity: "sensor.serwerownia_tauron_elicznik_bilans_energii",
-      daily_budget_entity: "sensor.serwerownia_tauron_elicznik_dzienny_budzet_energii",
-      monthly_budget_entity: "sensor.serwerownia_tauron_elicznik_miesieczny_budzet_energii",
-      days_entity: "sensor.serwerownia_tauron_elicznik_dni_do_rozliczenia",
-      billing_start_consumed_entity: "sensor.serwerownia_tauron_elicznik_energia_pobrana_na_poczatku_okresu",
-      billing_start_exported_entity: "sensor.serwerownia_tauron_elicznik_energia_oddana_na_poczatku_okresu",
-      last_reading_entity: "sensor.serwerownia_tauron_elicznik_data_ostatniego_odczytu",
-      last_fetch_entity: "sensor.serwerownia_tauron_elicznik_ostatnie_pobranie_danych",
-      refresh_entity: "button.tauron_elicznik_odswiez_dane",
-      tariff_entity: "sensor.serwerownia_tauron_elicznik_taryfa",
-      t1_entity: "sensor.serwerownia_tauron_elicznik_t1_licznik",
-      t2_entity: "sensor.serwerownia_tauron_elicznik_t2_licznik",
-      t3_entity: "sensor.serwerownia_tauron_elicznik_t3_licznik",
-      t1_daily_entity: "sensor.serwerownia_tauron_elicznik_t1_dzisiaj",
-      t2_daily_entity: "sensor.serwerownia_tauron_elicznik_t2_dzisiaj",
-      t3_daily_entity: "sensor.serwerownia_tauron_elicznik_t3_dzisiaj",
-      pse_today_entity: "sensor.serwerownia_tauron_elicznik_energetyczny_kompas_dzisiaj",
-      pse_tomorrow_entity: "sensor.serwerownia_tauron_elicznik_energetyczny_kompas_jutro",
-      title: "Energia",
-      days_history: 30,
-      auto_refresh_minutes: 60,
-      power_entity: "",
-      cost_entity: "",
-      carbon_entity: "",
-      meter_number_entity: "",
-      flow_image_url: "/local/tauron-energy-flow-clean2.jpg"
+  _chartSvg() {
+    const history=this._chartHistorySeries()||[];
+    const entry=this._selectedHistoryEntry();
+    const values=Array.isArray(entry?.values)?entry.values.map(Number):[];
+    const valid=values.filter(Number.isFinite);
+    if(!valid.length){
+      return `
+        <div class="chart-empty"><strong>Brak profilu godzinowego</strong><span>Oczekiwanie na dane godzinowe z /energia/api.</span></div>
+      `;
+    }
+
+    const W=900,H=255,left=48,right=16,top=42,bottom=34;
+    const plotW=W-left-right,plotH=H-top-bottom;
+    const max=Math.max(1,...valid)*1.16;
+    const slot=plotW/values.length;
+    const barW=Math.max(8,slot-5);
+
+    const zoneForHour=hour=>{
+      if(hour>=6&&hour<13)return{cls:"bar-t1",name:"T1"};
+      if(hour>=13&&hour<15)return{cls:"bar-t2",name:"T2"};
+      return{cls:"bar-t3",name:"T3"};
     };
-  }
 
-  constructor() {
-    super();
-    this.attachShadow({ mode: "open" });
-    this._config = {};
-    this._hass = null;
-    this._history = [];
-    this._loading = false;
-    this._timer = null;
-    this._autoRefreshTimer = null;
-    this._selectedDate = null;
-    this._autoRefreshMinutes = 60;
-  }
-
-  setConfig(config) {
-    this._config = { ...TauronEnergyCard.getStubConfig(), ...config };
-    this._autoRefreshMinutes = [60, 120].includes(Number(this._config.auto_refresh_minutes))
-      ? Number(this._config.auto_refresh_minutes)
-      : 60;
-    this._render();
-    this._startAutoRefresh();
-  }
-
-  set hass(hass) {
-    this._hass = hass;
-    this._render();
-    this._scheduleHistoryRefresh();
-  }
-
-  connectedCallback() {
-    this._scheduleHistoryRefresh();
-  }
-
-  disconnectedCallback() {
-    if (this._timer) clearTimeout(this._timer);
-    if (this._autoRefreshTimer) clearInterval(this._autoRefreshTimer);
-  }
-
-
-  _dateKey(date) {
-    const d = date instanceof Date ? date : new Date(date);
-    return [
-      d.getFullYear(),
-      String(d.getMonth() + 1).padStart(2, "0"),
-      String(d.getDate()).padStart(2, "0")
-    ].join("-");
-  }
-
-  _historyDateKeys() {
-    const history = this._chartHistorySeries();
-    return history ? history.map(entry => entry.date).filter(Boolean).sort() : [];
-  }
-
-  _selectedHistoryEntry() {
-    const history = this._chartHistorySeries();
-    if (!history?.length) return null;
-
-    if (!this._selectedDate) {
-      const today = this._dateKey(new Date());
-      this._selectedDate = history.some(entry => entry.date === today)
-        ? today
-        : history[history.length - 1].date;
-    }
-
-    return history.find(entry => entry.date === this._selectedDate)
-      || history[history.length - 1]
-      || null;
-  }
-
-  _dateLabel(dateKey) {
-    if (!dateKey) return "Brak daty";
-    const today = new Date();
-    const yesterday = new Date(today);
-    yesterday.setDate(today.getDate() - 1);
-
-    if (dateKey === this._dateKey(today)) return "Dzisiaj";
-    if (dateKey === this._dateKey(yesterday)) return "Wczoraj";
-
-    const parts = dateKey.split("-").map(Number);
-    return new Date(parts[0], parts[1] - 1, parts[2]).toLocaleDateString("pl-PL", {
-      weekday: "short",
-      day: "2-digit",
-      month: "2-digit",
-      year: "numeric"
-    });
-  }
-
-  _changeDate(offset) {
-    const keys = this._historyDateKeys();
-    if (!keys.length) return;
-
-    const current = keys.indexOf(this._selectedDate);
-    const next = (current < 0 ? keys.length - 1 : current) + offset;
-
-    if (next < 0 || next >= keys.length) return;
-
-    this._selectedDate = keys[next];
-    this._render();
-  }
-
-  _goToday() {
-    const today = this._dateKey(new Date());
-    const keys = this._historyDateKeys();
-    this._selectedDate = keys.includes(today) ? today : (keys[keys.length - 1] || today);
-    this._render();
-  }
-
-  _setAutoRefreshMinutes(value) {
-    this._autoRefreshMinutes = Number(value) === 120 ? 120 : 60;
-    this._config.auto_refresh_minutes = this._autoRefreshMinutes;
-    this._startAutoRefresh();
-    this._render();
-  }
-
-  _startAutoRefresh() {
-    if (this._autoRefreshTimer) clearInterval(this._autoRefreshTimer);
-
-    this._autoRefreshTimer = setInterval(async () => {
-      if (this._loading || !this._hass) return;
-
-      try {
-        if (this._config.refresh_entity) {
-          await this._hass.callService("button", "press", {
-            entity_id: this._config.refresh_entity
-          });
-        }
-
-        await new Promise(resolve => setTimeout(resolve, 1500));
-        await this._loadHistory();
-      } catch (err) {
-        console.warn("Tauron Energy Card: automatic refresh failed", err);
-      }
-    }, this._autoRefreshMinutes * 60 * 1000);
-  }
-
-  _scheduleHistoryRefresh() {
-    if (this._timer) clearTimeout(this._timer);
-    this._timer = setTimeout(() => this._loadHistory(), 250);
-  }
-
-  _state(entity) {
-    if (!entity || !this._hass?.states) return undefined;
-    if (this._hass.states[entity]) return this._hass.states[entity];
-
-    // Backward compatibility with the temporary entity ids used before
-    // Home Assistant generated ids from the translated names.
-    const aliases = {
-      "sensor.serwerownia_tauron_elicznik_pse_today":
-        "sensor.serwerownia_tauron_elicznik_energetyczny_kompas_dzisiaj",
-      "sensor.serwerownia_tauron_elicznik_pse_tomorrow":
-        "sensor.serwerownia_tauron_elicznik_energetyczny_kompas_jutro",
-    };
-    const resolved = aliases[entity];
-    return resolved ? this._hass.states[resolved] : undefined;
-  }
-
-  _num(entity, fallback = 0) {
-    const n = Number(this._state(entity)?.state);
-    return Number.isFinite(n) ? n : fallback;
-  }
-
-  _fmt(value, decimals = 2) {
-    if (!Number.isFinite(value)) return "—";
-    return new Intl.NumberFormat("pl-PL", {
-      minimumFractionDigits: decimals,
-      maximumFractionDigits: decimals
-    }).format(value);
-  }
-
-  _escape(value) {
-    return String(value ?? "")
-      .replaceAll("&", "&amp;")
-      .replaceAll("<", "&lt;")
-      .replaceAll(">", "&gt;")
-      .replaceAll('"', "&quot;");
-  }
-
-  _date(value) {
-    if (!value) return "—";
-    const d = new Date(value);
-    if (Number.isNaN(d.getTime())) return "—";
-    return new Intl.DateTimeFormat("pl-PL", {
-      day: "2-digit",
-      month: "2-digit",
-      year: "numeric",
-      hour: "2-digit",
-      minute: "2-digit"
-    }).format(d);
-  }
-
-  _relative(value) {
-    if (!value) return "";
-    const d = new Date(value);
-    if (Number.isNaN(d.getTime())) return "";
-    const minutes = Math.max(0, Math.round((Date.now() - d.getTime()) / 60000));
-    if (minutes < 1) return "przed chwilą";
-    if (minutes < 60) return `${minutes} min temu`;
-    const hours = Math.round(minutes / 60);
-    if (hours < 24) return `${hours} godz. temu`;
-    return `${Math.round(hours / 24)} dni temu`;
-  }
-
-  _historyPoints(entityId) {
-    return (this._history || [])
-      .flatMap(group => Array.isArray(group) ? group : (group.states || []))
-      .filter(x => x.entity_id === entityId)
-      .map(x => ({
-        t: new Date(x.last_changed || x.last_updated).getTime(),
-        v: Number(x.state)
-      }))
-      .filter(x => Number.isFinite(x.t) && Number.isFinite(x.v))
-      .sort((a, b) => a.t - b.t);
-  }
-
-  async _loadHistory() {
-    if (!this._hass || !this._config.consumed_entity) return;
-
-    const end = new Date();
-    const start = new Date(
-      end.getTime() - Number(this._config.days_history || 14) * 86400000
-    );
-
-    try {
-      const result = await this._hass.callWS({
-        type: "history/history_during_period",
-        start_time: start.toISOString(),
-        end_time: end.toISOString(),
-        entity_ids: [
-          this._config.consumed_entity,
-          this._config.exported_entity
-        ],
-        minimal_response: false,
-        no_attributes: true,
-        significant_changes_only: false
-      });
-
-      this._history = Object.entries(result || {}).flatMap(
-        ([entity_id, states]) =>
-          (Array.isArray(states) ? states : []).map(state => ({
-            entity_id,
-            ...state
-          }))
-      );
-
-      this._render();
-    } catch (err) {
-      console.warn("Tauron Energy Card: history unavailable", err);
-      this._history = [];
-      this._render();
-    }
-  }
-
-  _dailySeries(entityId) {
-    const source = this._historyPoints(entityId);
-    const days = [];
-    const now = new Date();
-
-    for (let i = Number(this._config.days_history || 14) - 1; i >= 0; i--) {
-      const d = new Date(now.getFullYear(), now.getMonth(), now.getDate() - i);
-      const next = new Date(d.getFullYear(), d.getMonth(), d.getDate() + 1);
-
-      const beforeStart = source.filter(p => p.t < d.getTime()).pop();
-      const beforeEnd = source.filter(p => p.t < next.getTime()).pop();
-
-      let delta = 0;
-      if (beforeStart && beforeEnd) {
-        delta = beforeEnd.v - beforeStart.v;
-      } else if (beforeEnd) {
-        const first = source.find(p => p.t >= d.getTime() && p.t < next.getTime());
-        delta = first ? beforeEnd.v - first.v : 0;
-      }
-
-      if (delta < 0 || !Number.isFinite(delta)) delta = 0;
-
-      days.push({
-        label: new Intl.DateTimeFormat("pl-PL", {
-          day: "2-digit",
-          month: "2-digit"
-        }).format(d),
-        value: delta,
-        date: d.toISOString().slice(0, 10)
-      });
-    }
-
-    return days;
-  }
-
-  _chartHistorySeries() {
-    const state = this._state(this._config.daily_consumed_entity);
-    const history = state?.attributes?.chart_history;
-    if (!Array.isArray(history) || !history.length) return null;
-
-    return history
-      .filter(day => day && day.date)
-      .map(day => ({
-        label: new Intl.DateTimeFormat("pl-PL", {
-          day: "2-digit",
-          month: "2-digit"
-        }).format(new Date(day.date + "T12:00:00")),
-        value: Number(day.total),
-        date: day.date,
-        values: Array.isArray(day.values) ? day.values : [],
-        source: day.source || "energia/api"
-      }))
-      .filter(day => Number.isFinite(day.value));
-  }
-
-  _todayHistoryValue() {
-    const entry = this._selectedHistoryEntry();
-    return entry ? entry.value : null;
-  }
-
-  _todayDailyConsumed() {
-    const historyValue = this._todayHistoryValue();
-    if (Number.isFinite(historyValue)) return historyValue;
-
-    if (this._selectedDate === this._dateKey(new Date())) {
-      const value = this._num(this._config.daily_consumed_entity, NaN);
-      return Number.isFinite(value) ? value : NaN;
-    }
-
-    return NaN;
-  }
-
-
-  _pseStatusClass(value) {
-    const text = String(value || "").toLowerCase();
-    if (text.includes("wymagane")) return "pse-red";
-    if (text.includes("oszczędzanie")) return "pse-yellow";
-    if (text.includes("normalne")) return "pse-green";
-    if (text.includes("zalecane użytkowanie")) return "pse-darkgreen";
-    return "pse-neutral";
-  }
-
-  _pseTimeline(entityId) {
-    const hours = this._state(entityId)?.attributes?.hours;
-    if (!Array.isArray(hours)) return "";
-    return hours.map(item => {
-      const time = String(item.dtime || "").slice(11, 16);
-      const status = String(item.state || "Nieznany status");
-      return `<div class="pse-hour ${this._pseStatusClass(status)}" title="${this._escape(status)}"><span>${time}</span><i></i></div>`;
+    const bars=values.map((value,i)=>{
+      if(!Number.isFinite(value))return"";
+      const x=left+i*slot+(slot-barW)/2;
+      const h=Math.max(2,(value/max)*plotH);
+      const y=top+plotH-h;
+      const zone=zoneForHour(i);
+      return `<g class="hourbar" tabindex="0" data-kind="Pobór" data-label="{{String(i).padStart(2,"0")}}:00" data-value="{{value}}">
+        <rect class="{{zone.cls}}" x="{{x.toFixed(1)}}" y="{{y.toFixed(1)}}" width="{{barW.toFixed(1)}}" height="{{h.toFixed(1)}}" rx="4"/>
+        <title>{{String(i).padStart(2,"0")}}:00 · {{zone.name}} · {{this._fmt(value,2)}} kWh</title>
+      </g>`;
     }).join("");
-  }
 
-  _pseCard(title, subtitle, entityId) {
-    const state = this._state(entityId);
-    const status = state?.state && !["unknown","unavailable"].includes(state.state)
-      ? state.state
-      : "Brak opublikowanych danych";
-    const timeline = this._pseTimeline(entityId);
-    return `<div class="pse-card">
-      <div class="pse-card-head">
-        <div><strong>${title}</strong><span>${subtitle}</span></div>
-        <b class="${this._pseStatusClass(status)}">${this._escape(status)}</b>
-      </div>
-      <div class="pse-timeline">${timeline || '<div class="pse-empty">PSE nie opublikowało jeszcze godzin dla tego dnia.</div>'}</div>
-    </div>`;
-  }
-
-  _hourlyProfileSvg() {
-    const history = this._chartHistorySeries();
-    if (!history?.length) return "";
-    const entry = this._selectedHistoryEntry();
-    const values = Array.isArray(entry?.values) ? entry.values.map(Number).filter(Number.isFinite) : [];
-    if (!values.length) return "";
-
-    const W = 900, H = 190, left = 42, right = 18, top = 18, bottom = 32;
-    const plotW = W - left - right, plotH = H - top - bottom;
-    const max = Math.max(1, ...values) * 1.12;
-
-    const bars = values.map((value, i) => {
-      const slot = plotW / values.length, gap = 4, width = Math.max(4, slot - gap);
-      const x = left + i * slot + gap / 2;
-      const height = Math.max(1, (value / max) * plotH);
-      const y = top + plotH - height;
-      const label = String(i).padStart(2, "0");
-      return `<rect class="hour-bar" x="${x.toFixed(1)}" y="${y.toFixed(1)}" width="${width.toFixed(1)}" height="${height.toFixed(1)}" rx="3"><title>${label}:00 — ${this._fmt(value,2)} kWh</title></rect><text class="hour-axis" x="${(x+width/2).toFixed(1)}" y="${H-8}" text-anchor="middle">${label}</text>`;
+    const grid=[0,.25,.5,.75,1].map(r=>{
+      const y=top+plotH-r*plotH;
+      return `<line class="chart-grid" x1="{{left}}" y1="{{y}}" x2="{{W-right}}" y2="{{y}}"/>
+        <text class="chart-axis-y" x="{{left-8}}" y="{{y+4}}" text-anchor="end">{{this._fmt(max*r,1)}}</text>`;
     }).join("");
+
+    const labels=values.map((_,i)=>{
+      if(values.length>12&&i%2!==0)return"";
+      const x=left+i*slot+slot/2;
+      return `<text class="chart-axis-x" x="{{x.toFixed(1)}}" y="{{H-10}}" text-anchor="middle">{{String(i).padStart(2,"0")}}</text>`;
+    }).join("");
+
+    const idx=history.findIndex(x=>x.date===entry?.date);
+    const previous=idx>0?Number(history[idx-1]?.value):NaN;
+    const delta=Number.isFinite(entry?.value)&&Number.isFinite(previous)&&previous>0
+      ?((entry.value-previous)/previous)*100:NaN;
 
     return `
-      <div class="hourly">
-        <div class="section-title"><strong>Godzinowy profil zużycia · ${this._dateLabel(entry?.date || this._selectedDate)}</strong><span>24 godziny</span></div>
-        <svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" role="img" aria-label="Godzinowy profil dzisiejszego zużycia">
-          <line class="hour-grid" x1="${left}" y1="${top+plotH}" x2="${W-right}" y2="${top+plotH}"></line>
-          ${bars}
+      <div class="chart-inner">
+        <div class="chart-summary">
+          <div><strong>{{Number.isFinite(entry?.value)?this._fmt(entry.value,1):"—"}} kWh</strong>
+          <span>{{this._dateLabel(entry?.date||this._selectedDate)}}</span>
+          {{Number.isFinite(delta)?`<em class="{{delta<=0?"down":"up"}}">{{delta<=0?"↓":"↑"}} {{this._fmt(Math.abs(delta),0)}}%</em>`:""}}</div>
+          <div class="chart-tabs" role="tablist" aria-label="Zakres">
+            <button class="chart-tab active" type="button">Dzień</button>
+            <button class="chart-tab" type="button">Tydzień</button>
+            <button class="chart-tab" type="button">Miesiąc</button>
+          </div>
+        </div>
+        <svg viewBox="0 0 {{W}} {{H}}" preserveAspectRatio="none" role="img" aria-label="Godzinowe zużycie energii">
+          {{grid}}{{bars}}{{labels}}
         </svg>
+        <div class="chart-legend"><span><i class="legend-blue"></i>T1</span><span><i class="legend-orange"></i>T2</span><span><i class="legend-purple"></i>T3</span></div>
       </div>
-    `;
-  }
-
-  _energyFlowSvg(dailyConsumed){
-    const active=Number.isFinite(dailyConsumed)&&dailyConsumed>0;
-    const imageUrl=this._config.flow_image_url||"/local/tauron-energy-flow-clean2.jpg";
-    const total=this._num(this._config.consumed_entity,NaN);
-    const meter=Number.isFinite(total)?String(Math.round(total)).padStart(6,"0"):"------";
-    const power=this._num(this._config.power_entity,NaN);
-    const t1=this._num(this._config.t1_entity,NaN);
-    const t2=this._num(this._config.t2_entity,NaN);
-    const t3=this._num(this._config.t3_entity,NaN);
-
-    const a1="M166 91 C250 86 348 103 446 127";
-    const a2="M595 135 C646 136 688 131 735 128";
-    const a3="M910 130 C963 135 1008 157 1050 167";
-    const arrow=(path,delay)=>`
-      <g class="energy-arrow">
-        <path d="M0 0 L16 9 L0 18"/>
-        <animateMotion dur="2.8s" begin="{{delay}}s" repeatCount="indefinite" rotate="auto" path="{{path}}"/>
-      </g>`.replaceAll("{{",").replaceAll(}","}");
-
-    return `
-      <section class="scene {{active?"flow-live":"flow-idle"}}" aria-label="Przepływ energii">
-        <div class="scene-topbar">
-          <div>
-            <div class="scene-kicker">PRZEPŁYW ENERGII</div>
-            <strong>Sieć → licznik → rozdzielnica → dom</strong>
-            <span>Animowany kierunek przepływu</span>
-          </div>
-          <div class="scene-status"><i></i>{{active?"Przepływ aktywny":"Brak dzisiejszego poboru"}}</div>
-        </div>
-        <div class="scene-art">
-          <img src="{{this._escape(imageUrl)}}" alt="Słup energetyczny, licznik MA309M, rozdzielnica główna i dom" loading="eager" decoding="async">
-          <svg class="scene-motion" viewBox="0 0 1250 233" preserveAspectRatio="none" aria-hidden="true">
-            <defs><filter id="sceneArrowGlow"><feGaussianBlur stdDeviation="3.2" result="blur"/><feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge></filter></defs>
-            <path class="scene-motion-line" d="{{a1}}"/><path class="scene-motion-line" d="{{a2}}"/><path class="scene-motion-line" d="{{a3}}"/>
-            <g class="scene-arrows">{{arrow(a1,0)}}{{arrow(a1,.47)}}{{arrow(a2,.94)}}{{arrow(a2,1.41)}}{{arrow(a3,1.88)}}{{arrow(a3,2.35)}}</g>
-          </svg>
-          <div class="scene-meter-live" aria-label="Rzeczywisty stan licznika z Home Assistant"><strong>{{meter}}</strong><span>kWh</span></div>
-          <div class="scene-data-strip">
-            <span><b>Pobór dzisiaj</b> {{Number.isFinite(dailyConsumed)?this._fmt(dailyConsumed,2):"—"}} kWh</span>
-            {{Number.isFinite(power)?`<span><b>Moc chwilowa</b> {{this._fmt(power,0)}} W</span>`:"<span><b>Moc chwilowa</b> —</span>"}}
-            {{Number.isFinite(t1)?`<span><b>T1</b> {{this._fmt(t1,0)}} kWh</span>`:""}}
-            {{Number.isFinite(t2)?`<span><b>T2</b> {{this._fmt(t2,0)}} kWh</span>`:""}}
-            {{Number.isFinite(t3)?`<span><b>T3</b> {{this._fmt(t3,0)}} kWh</span>`:""}}
-          </div>
-          <div class="scene-vignette" aria-hidden="true"></div>
-        </div>
-        <div class="scene-bottom"><span><i class="flow-dot"></i>{{active?"Animowany przepływ aktywny":"Brak dzisiejszego poboru"}} · dane rzeczywiste z Home Assistant</span><strong>{{Number.isFinite(dailyConsumed)?`Dzisiaj · {{this._fmt(dailyConsumed,2)}} kWh`:"Brak danych dziennych"}}</strong></div>
-      </section>
     `.replaceAll("{{",").replaceAll(}","}");
   }
+  async _refresh() {
+    const entity = this._config.refresh_entity;
+    if (!this._hass || !entity || this._loading) return;
+
+    this._loading = true;
+    this._render();
+
+    try {
+      await this._hass.callService("button", "press", { entity_id: entity });
+      await new Promise(r => setTimeout(r, 1200));
+      await this._loadHistory();
+    } catch (err) {
+      console.error("Tauron Energy Card: refresh failed", err);
+    } finally {
+      this._loading = false;
+      this._render();
+    }
+  }
+
+  _render() {
+    if (!this.shadowRoot || !this._hass || !this._config.consumed_entity) return;
+
+    const c=this._config;
+    const consumed=this._num(c.consumed_entity,NaN);
+    const exported=this._num(c.exported_entity,NaN);
+    const dailyConsumed=this._todayDailyConsumed();
+    const dailyExported=this._num(c.daily_exported_entity,NaN);
+    const dailyAverage=this._num(c.daily_average_entity,NaN);
+    const t1=this._num(c.t1_entity,NaN), t2=this._num(c.t2_entity,NaN), t3=this._num(c.t3_entity,NaN);
+    const t1Daily=this._num(c.t1_daily_entity,NaN), t2Daily=this._num(c.t2_daily_entity,NaN), t3Daily=this._num(c.t3_daily_entity,NaN);
+    const balance=this._num(c.balance_entity,NaN);
+    const dailyBudget=this._num(c.daily_budget_entity,NaN);
+    const days=this._num(c.days_entity,NaN);
+    const lastReading=this._state(c.last_reading_entity)?.state;
+    const lastFetch=this._state(c.last_fetch_entity)?.state;
+    const tariff=this._state(c.tariff_entity)?.state||"—";
+    const power=this._num(c.power_entity,NaN);
+    const cost=this._num(c.cost_entity,NaN);
+    const carbon=this._num(c.carbon_entity,NaN);
+    const meterNumber=this._state(c.meter_number_entity)?.state||"—";
+    const updated=lastFetch||lastReading;
+
+    const budgetBase=Math.abs(dailyBudget);
+    const budgetPercent=budgetBase>0&&Number.isFinite(dailyConsumed)?Math.min(100,Math.max(0,(dailyConsumed/budgetBase)*100)):0;
+
+    const history=this._chartHistorySeries()||[];
+    const selectedDate=this._selectedDate||this._dateKey(new Date());
+    const selectedIndex=history.findIndex(x=>x.date===selectedDate);
+    const previous=selectedIndex>0?Number(history[selectedIndex-1]?.value):NaN;
+    const changePct=Number.isFinite(dailyConsumed)&&Number.isFinite(previous)&&previous>0
+      ?((dailyConsumed-previous)/previous)*100:NaN;
+    const changeText=Number.isFinite(changePct)
+      ? (changePct<=0?"↓":"↑")+" "+this._fmt(Math.abs(changePct),0)+"%"
+      : "Brak porównania";
+
+    const statsValues=history.map(x=>Number(x.value)).filter(Number.isFinite);
+    const max30=statsValues.length?Math.max(...statsValues):NaN;
+    const min30=statsValues.length?Math.min(...statsValues):NaN;
+    const total30=statsValues.length?statsValues.reduce((sum,v)=>sum+v,0):NaN;
+
+    const fmtP=value=>Number.isFinite(value)?this._fmt(value,0)+" W":"— W";
+    const fmtMoney=value=>Number.isFinite(value)?this._fmt(value,2)+" zł":"—";
+    const fmtCo2=value=>Number.isFinite(value)?this._fmt(value,1)+" kg CO₂":"—";
+    const currentDate=this._dateKey(new Date());
+    const selectedLabel=this._dateLabel(selectedDate);
+
+    this.shadowRoot.innerHTML=String.raw`
+      <style>
+        :host{
+          display:block;width:100%;color-scheme:dark;
+          --bg:#030f19;--panel:#071a28;--panel2:#0a2030;--card:#0a1e2d;
+          --border:#153b53;--text:#edf8ff;--muted:#8ca7bb;
+          --blue:#2ea2ff;--cyan:#61e7ff;--green:#27df85;--orange:#ff9b3d;--purple:#9b63ff;
+          font-family:Inter,Roboto,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
+        }
+        *{box-sizing:border-box}
+        .dashboard{
+          width:100%;padding:16px;border-radius:24px;overflow:hidden;color:var(--text);
+          background:
+            radial-gradient(circle at 7% 0%,rgba(46,162,255,.12),transparent 27%),
+            radial-gradient(circle at 96% 0%,rgba(155,99,255,.09),transparent 22%),
+            linear-gradient(180deg,#061523 0%,#030e17 100%);
+          box-shadow:0 18px 55px rgba(0,0,0,.3)
+        }
+        .topbar{display:flex;align-items:center;justify-content:space-between;gap:18px;margin-bottom:13px}
+        .brand{display:flex;align-items:center;gap:11px;min-width:220px}
+        .brand-mark{
+          width:48px;height:48px;border-radius:15px;display:grid;place-items:center;
+          background:linear-gradient(145deg,#18133a,#531e70);border:1px solid #693f93;
+          box-shadow:0 10px 28px rgba(117,51,163,.22)
+        }
+        .brand-mark svg{width:34px;height:34px;filter:drop-shadow(0 0 7px rgba(255,59,145,.25))}
+        .brand h1{margin:0;font-size:20px;line-height:1;font-weight:900;letter-spacing:-.03em}
+        .brand h1 span{display:block;color:#ff3b91;font-size:15px;margin-top:3px}
+        .brand small{display:block;color:var(--muted);font-size:8px;margin-top:5px}
+        .nav{display:flex;align-items:center;gap:4px;padding:5px;border:1px solid #173b53;border-radius:999px;background:#081b2a}
+        .nav b{padding:10px 24px;border-radius:999px;font-size:10px;color:#98b2c7;white-space:nowrap}
+        .nav b.active{color:#fff;background:linear-gradient(180deg,#2b98f0,#176fc1);box-shadow:0 0 25px rgba(43,152,240,.34)}
+        .top-actions{display:flex;align-items:center;gap:8px}
+        .connection{display:flex;align-items:center;gap:8px;padding:10px 12px;min-width:220px;border:1px solid #193d54;border-radius:15px;background:rgba(8,28,42,.82)}
+        .connection i{width:10px;height:10px;border-radius:50%;background:#29df83;box-shadow:0 0 0 5px rgba(41,223,131,.08)}
+        .connection strong{display:block;font-size:10px}.connection span{display:block;margin-top:2px;color:var(--muted);font-size:7px}
+        button{font:inherit}
+        .refresh{width:36px;height:36px;border-radius:11px;border:1px solid #1b4058;background:#0a2132;color:#dff5ff;cursor:pointer;font-size:18px}
+        .refresh:hover{border-color:#2c91d5;background:#0e2b40}
+        button:focus-visible{outline:2px solid var(--cyan);outline-offset:2px}
+        .spin{display:inline-block;animation:spin 1s linear infinite}@keyframes spin{to{transform:rotate(360deg)}
+
+        .scene{position:relative;margin-bottom:13px;border:1px solid #183e56;border-radius:17px;overflow:hidden;background:#061624;box-shadow:0 12px 35px rgba(0,0,0,.24)}
+        .scene-topbar{position:absolute;z-index:7;left:16px;right:16px;top:13px;display:flex;justify-content:space-between;gap:10px;text-shadow:0 2px 12px rgba(0,0,0,.8)}
+        .scene-kicker{font-size:7px;font-weight:900;letter-spacing:.15em;color:#69ddff}.scene-topbar strong{display:block;font-size:12px}.scene-topbar span{display:block;margin-top:2px;font-size:7px;color:#b7cddd}
+        .scene-status{display:flex;align-items:center;gap:6px;padding:6px 9px;border:1px solid rgba(74,149,187,.35);border-radius:999px;background:rgba(3,17,27,.72);font-size:8px;font-weight:800;white-space:nowrap}
+        .scene-status i{width:6px;height:6px;border-radius:50%;background:#9aacbb}.flow-live .scene-status{color:#6ef0ad;border-color:rgba(39,223,133,.35)}.flow-live .scene-status i{background:#27df85;box-shadow:0 0 10px rgba(39,223,133,.8);animation:statusPulse 1.7s ease-out infinite}
+        @keyframes statusPulse{0%{box-shadow:0 0 0 0 rgba(39,223,133,.3)}70%{box-shadow:0 0 0 7px rgba(39,223,133,0)}100%{box-shadow:0 0 0 0 rgba(39,223,133,0)}
+        .scene-art{position:relative;width:100%;aspect-ratio:1250/233;overflow:hidden;line-height:0}
+        .scene-art img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;display:block}
+        .scene-motion{position:absolute;inset:0;z-index:4;width:100%;height:100%;display:block;overflow:hidden;pointer-events:none}
+        .scene-motion-line{fill:none;stroke:#6cddff;stroke-width:2;stroke-linecap:round;opacity:.18;stroke-dasharray:10 18}
+        .flow-live .scene-motion-line{animation:flowDash 1.6s linear infinite}
+        @keyframes flowDash{to{stroke-dashoffset:-56}
+        .scene-arrows{display:none}.flow-live .scene-arrows{display:block}
+        .energy-arrow path{fill:none;stroke:#d9fbff;stroke-width:3.2;stroke-linecap:round;stroke-linejoin:round;filter:url(#sceneArrowGlow)}
+        .scene-meter-live{
+          position:absolute;z-index:5;left:38.1%;top:39.5%;width:6.1%;height:17%;
+          display:flex;align-items:center;justify-content:center;flex-direction:column;
+          border:1px solid rgba(65,97,111,.72);border-radius:6px;
+          background:linear-gradient(180deg,rgba(241,252,255,.98),rgba(205,236,241,.98));
+          box-shadow:0 0 10px rgba(58,205,255,.16);color:#122b38
+        }
+        .scene-meter-live strong{font:800 clamp(8px,1.05vw,16px)/1 monospace;letter-spacing:.02em}.scene-meter-live span{margin-top:2px;font:800 clamp(4px,.42vw,7px)/1 system-ui;color:#526b78}
+        .scene-data-strip{
+          position:absolute;z-index:6;left:50%;bottom:5%;transform:translateX(-50%);
+          display:flex;align-items:center;justify-content:center;gap:4px;max-width:92%;padding:4px 7px;
+          border:1px solid rgba(123,200,234,.26);border-radius:999px;background:rgba(3,18,29,.72);
+          backdrop-filter:blur(6px);color:#c7dbe6;font-size:6px;white-space:nowrap;line-height:1.1
+        }
+        .scene-data-strip span{padding:0 5px;border-right:1px solid rgba(142,191,216,.18)}.scene-data-strip span:last-child{border-right:0}.scene-data-strip b{color:#f1f8fd}
+        .scene-vignette{position:absolute;z-index:2;inset:0;pointer-events:none;background:linear-gradient(90deg,rgba(2,11,20,.08),transparent 22%,transparent 78%,rgba(2,11,20,.08))}
+        .scene-bottom{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:8px 12px;border-top:1px solid #18384f;background:#06131e;color:#8da8bb;font-size:7px}
+        .scene-bottom span{display:flex;align-items:center;gap:5px}.scene-bottom strong{font-size:8px;color:#e7f4fb}.flow-dot{width:6px;height:6px;border-radius:50%;background:#38d8ff;box-shadow:0 0 8px rgba(56,216,255,.65)}
+
+        .kpi-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:11px;margin-bottom:12px}
+        .kpi{
+          min-height:158px;padding:15px;border:1px solid #17384e;border-radius:15px;position:relative;overflow:hidden;
+          background:linear-gradient(180deg,#0a1f2e,#071825);box-shadow:0 9px 22px rgba(0,0,0,.15)
+        }
+        .kpi.orange{background:linear-gradient(180deg,#101f2b,#081722)}.kpi.green{background:linear-gradient(180deg,#0a211d,#071921)}
+        .kpi-top{display:flex;align-items:center;gap:10px}.kpi-icon{width:36px;height:36px;border-radius:11px;display:grid;place-items:center;border:1px solid #214c67;background:#0d2c43;color:#5fcfff;font-size:18px}
+        .kpi.orange .kpi-icon{background:#33200d;border-color:#674720;color:#ffc04d}.kpi.green .kpi-icon{background:#092a1e;border-color:#18513a;color:#5deba8}
+        .kpi-label{color:#9db5c9;font-size:10px}.kpi-value{margin-top:15px;font-size:30px;font-weight:900;letter-spacing:-.04em;line-height:1}.kpi-value small{font-size:12px;color:#9fb7ca;font-weight:700}
+        .kpi-sub{margin-top:8px;color:#91aabd;font-size:8px;display:flex;flex-direction:column;gap:3px}.kpi-sub strong{color:#5febaa;font-size:9px}.kpi-sub strong.up{color:#ff9e60}.kpi-sub span{color:#809aae}
+        .kpi-bar{position:absolute;left:15px;right:15px;bottom:14px;height:6px;border-radius:999px;background:#102d42;overflow:hidden}.kpi-bar i{display:block;height:100%;border-radius:inherit;background:linear-gradient(90deg,#2ca4ff,#62e2ff)}
+        .mini-trend{height:36px;margin-top:8px}.mini-trend svg{width:100%;height:100%;display:block}.mini-line{fill:none;stroke:#34dc8a;stroke-width:2.1;stroke-linecap:round}
+
+        .main-grid{display:grid;grid-template-columns:minmax(0,1.08fr) minmax(0,1fr);gap:12px;margin-bottom:12px}
+        .panel-card{min-width:0;border:1px solid #17384f;border-radius:17px;background:linear-gradient(180deg,#091d2b,#071724);padding:15px;box-shadow:0 10px 25px rgba(0,0,0,.15)}
+        .card-head{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:11px}.card-head strong{font-size:14px;letter-spacing:-.015em}.card-head span{display:block;color:#7f9bad;font-size:8px;margin-top:2px}
+        .pill{padding:7px 10px;border-radius:999px;border:1px solid #1f506d;background:#0b2b43;color:#65caff;font-size:9px;font-weight:900}
+        .zone-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
+        .zone{padding:12px;border:1px solid #193e57;border-radius:13px;background:linear-gradient(180deg,#0a2030,#071824);min-width:0}
+        .zone .badge{display:inline-flex;align-items:center;justify-content:center;min-width:44px;height:26px;padding:0 10px;border-radius:9px;font-size:10px;font-weight:900}
+        .z1 .badge{background:linear-gradient(180deg,#1686f7,#126acb);color:#fff;border:1px solid #38aaff;box-shadow:0 0 15px rgba(46,162,255,.24)}
+        .z2 .badge{background:linear-gradient(180deg,#ffad43,#f27c1e);color:#fff;border:1px solid #ffc467;box-shadow:0 0 15px rgba(255,155,61,.18)}
+        .z3 .badge{background:linear-gradient(180deg,#aa6aff,#7d42d8);color:#fff;border:1px solid #bb8eff;box-shadow:0 0 15px rgba(155,99,255,.2)}
+        .z1{border-color:#173f64}.z2{border-color:#5c421f}.z3{border-color:#49306f}
+        .zone small{display:block;color:#7d99ad;font-size:8px;margin-top:7px}.zone>b{display:block;margin-top:9px;font-size:20px;letter-spacing:-.02em}.zone>b i{font-style:normal;font-size:9px;color:#8da7ba}
+        .zone-footer{display:flex;justify-content:space-between;align-items:center;gap:7px;margin-top:10px;padding-top:9px;border-top:1px solid #18364a;color:#7d98ac;font-size:8px}.zone-footer strong{font-size:10px}
+        .z1 .zone-footer strong{color:#5ec2ff}.z2 .zone-footer strong{color:#ffb65f}.z3 .zone-footer strong{color:#c09aff}
+
+        .chart-inner{position:relative;width:100%;height:252px}.chart-summary{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:3px}.chart-summary>div:first-child{display:flex;align-items:baseline;gap:9px;flex-wrap:wrap}
+        .chart-summary strong{font-size:27px;letter-spacing:-.04em}.chart-summary span{font-size:8px;color:#7894aa}.chart-summary em{font-style:normal;color:#59eba7;font-size:9px;font-weight:900}.chart-summary em.up{color:#ff9e60}
+        .chart-tabs{display:flex;align-items:center;gap:3px;padding:4px;background:#0a1b2a;border:1px solid #183a51;border-radius:999px}.chart-tab{border:0;background:transparent;color:#8ca6b9;border-radius:999px;padding:7px 10px;font-size:8px;cursor:pointer}.chart-tab.active{color:#fff;background:linear-gradient(180deg,#2a98f0,#176fc1);box-shadow:0 0 18px rgba(42,152,240,.28)}
+        .chart-inner svg{width:100%;height:210px;display:block;overflow:visible}.chart-grid{stroke:#17364b;stroke-width:1}.chart-axis-y,.chart-axis-x{fill:#789  _chartSvg() {
+    const history=this._chartHistorySeries()||[];
+    const entry=this._selectedHistoryEntry();
+    const values=Array.isArray(entry?.values)?entry.values.map(Number):[];
+    const valid=values.filter(Number.isFinite);
+
+    if(!valid.length){
+      return \`
+        <div class="chart-empty"><strong>Brak profilu godzinowego</strong><span>Oczekiwanie na dane godzinowe z /energia/api.</span></div>
+      \`;
+    }
+
+    const W=900,H=255,left=48,right=16,top=38,bottom=34;
+    const plotW=W-left-right,plotH=H-top-bottom;
+    const max=Math.max(1,...valid)*1.18;
+    const slot=plotW/values.length;
+    const barW=Math.max(8,slot-5);
+    const zoneForHour=hour=>{
+      if(hour>=6&&hour<13)return{cls:"bar-t1",name:"T1"};
+      if(hour>=13&&hour<15)return{cls:"bar-t2",name:"T2"};
+      return{cls:"bar-t3",name:"T3"};
+    };
+
+    const bars=values.map((value,i)=>{
+      if(!Number.isFinite(value))return"";
+      const x=left+i*slot+(slot-barW)/2;
+      const h=Math.max(2,(value/max)*plotH);
+      const y=top+plotH-h;
+      const zone=zoneForHour(i);
+      return \`<g class="hourbar" tabindex="0" data-kind="Pobór" data-label="${String(i).padStart(2,"0")}:00" data-value="${value}">
+        <rect class="${zone.cls}" x="${x.toFixed(1)}" y="${y.toFixed(1)}" width="${barW.toFixed(1)}" height="${h.toFixed(1)}" rx="4"/>
+        <title>${String(i).padStart(2,"0")}:00 · ${zone.name} · ${this._fmt(value,2)} kWh</title>
+      </g>\`;
+    }).join("");
+
+    const grid=[0,.25,.5,.75,1].map(r=>{
+      const y=top+plotH-r*plotH;
+      return \`<line class="chart-grid" x1="${left}" y1="${y}" x2="${W-right}" y2="${y}"/>
+        <text class="chart-axis-y" x="${left-8}" y="${y+4}" text-anchor="end">${this._fmt(max*r,1)}</text>\`;
+    }).join("");
+
+    const labels=values.map((_,i)=>{
+      if(values.length>12&&i%2!==0)return"";
+      const x=left+i*slot+slot/2;
+      return \`<text class="chart-axis-x" x="${x.toFixed(1)}" y="${H-10}" text-anchor="middle">${String(i).padStart(2,"0")}</text>\`;
+    }).join("");
+
+    const total=Number.isFinite(entry?.value)?entry.value:NaN;
+    const idx=history.findIndex(x=>x.date===entry?.date);
+    const previous=idx>0?Number(history[idx-1]?.value):NaN;
+    const delta=Number.isFinite(total)&&Number.isFinite(previous)&&previous>0?((total-previous)/previous)*100:NaN;
+
+    return \`
+      <div class="chart-inner">
+        <div class="chart-summary">
+          <div>
+            <strong>${Number.isFinite(total)?this._fmt(total,1):"—"} kWh</strong>
+            <span>${this._dateLabel(entry?.date||this._selectedDate)}</span>
+            ${Number.isFinite(delta)?\`<em class="${delta<=0?"down":"up"}">${delta<=0?"↓":"↑"} ${this._fmt(Math.abs(delta),0)}%</em>\`:""}
+          </div>
+          <div class="chart-tabs" role="tablist" aria-label="Zakres">
+            <button class="chart-tab active" type="button" aria-selected="true">Dzień</button>
+            <button class="chart-tab" type="button" aria-selected="false">Tydzień</button>
+            <button class="chart-tab" type="button" aria-selected="false">Miesiąc</button>
+          </div>
+        </div>
+        <svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" role="img" aria-label="Godzinowe zużycie energii">
+          ${grid}${bars}${labels}
+        </svg>
+        <div class="chart-legend">
+          <span><i class="legend-blue"></i>T1</span>
+          <span><i class="legend-orange"></i>T2</span>
+          <span><i class="legend-purple"></i>T3</span>
+        </div>
+        <div class="chart-tooltip" hidden></div>
+      </div>
+    \`;
+  }:8px 2px 0;color:#648097;font-size:7px}
+
+        @media(prefers-reduced-motion:reduce){.flow-live .scene-status i,.flow-live .scene-motion-line,.scene-arrows,.spin{animation:none!important}
+        @media(max-width:1050px){.nav b{padding:9px 15px}.connection{min-width:160px}.bottom-grid{grid-template-columns:1fr 1fr}.bottom-grid .context{grid-column:1/-1}.kpi-grid{grid-template-columns:repeat(2,1fr)}.main-grid{grid-template-columns:1fr}
+        @media(max-width:700px){.dashboard{padding:10px}.topbar{align-items:flex-start}.nav{display:none}.connection{min-width:0;padding:8px}.connection span{display:none}.brand{min-width:0}.scene-topbar{left:10px;right:10px;top:9px}.scene-topbar strong{font-size:9px}.scene-status{padding:6px 7px;font-size:7px}.scene-data-strip{max-width:96%;font-size:5px}.scene-meter-live{left:38%;top:39%;width:6.4%;height:18%}.kpi-grid{grid-template-columns:1fr 1fr}.kpi{min-height:135px;padding:12px}.kpi-value{font-size:23px}.zone-grid,.pse-grid{grid-template-columns:1fr}.bottom-grid{grid-template-columns:1fr}.bottom-grid .context{grid-column:auto}.chart-tabs{display:none}.chart-inner{height:230px}.chart-inner svg{height:185px}.info-grid{grid-template-columns:1fr}.footer{flex-direction:column}
+      </style>
+
+      <section class="dashboard" aria-label="Tauron eLicznik">
+        <header class="topbar">
+          <div class="brand">
+            <div class="brand-mark" aria-hidden="true">
+              <svg viewBox="0 0 48 48">
+                <path d="M8 19c7-10 14-14 21-14 5 0 8 2 11 5-8-2-13 0-17 5 6 0 11 3 15 8-7-2-13-2-18 2 5 2 8 5 9 10-8-1-15-5-19-12-3-5-3-9-2-14z" fill="#ff3b91"/>
+                <path d="M8 19c4 5 10 8 18 8 5 0 10-1 14-4-2 7-8 12-16 14-6-1-11-4-15-9-3-4-3-6-1-9z" fill="#7b49ff" opacity=".92"/>
+              </svg>
+            </div>
+            <div><h1>TAURON <span>eLicznik</span></h1><small>${this._escape(c.title||"Energia")} · zużycie i analiza</small></div>
+          </div>
+          <nav class="nav" aria-label="Sekcje panelu"><b class="active">Energia</b><b>Analiza</b><b>Taryfa</b><b>Ustawienia</b></nav>
+          <div class="top-actions">
+            <div class="connection"><i></i><div><strong>Połączony</strong><span>${updated?this._date(updated):"Brak danych"}</span></div></div>
+            <button class="refresh" data-refresh title="Odśwież dane Tauron" aria-label="Odśwież dane Tauron" ${this._loading?"disabled":""}><span class="${this._loading?"spin":""}">↻</span></button>
+          </div>
+        </header>
+
+        ${this._energyFlowSvg(dailyConsumed)}
+
+        <section class="kpi-grid" aria-label="Podsumowanie energii">
+          <article class="kpi">
+            <div class="kpi-top"><div class="kpi-icon">⌂</div><span class="kpi-label">Pobór dzisiaj</span></div>
+            <div class="kpi-value">${Number.isFinite(dailyConsumed)?this._fmt(dailyConsumed,2):"—"} <small>kWh</small></div>
+            <div class="kpi-sub"><strong class="${Number.isFinite(changePct)&&changePct>0?"up":""}">${this._escape(changeText)}</strong><span>porównanie z poprzednim dniem</span></div>
+            <div class="kpi-bar"><i style="width:${budgetPercent}%"></i></div>
+          </article>
+
+          <article class="kpi">
+            <div class="kpi-top"><div class="kpi-icon">⚡</div><span class="kpi-label">Moc chwilowa</span></div>
+            <div class="kpi-value">${Number.isFinite(power)?this._fmt(power,0):"—"} <small>W</small></div>
+            <div class="kpi-sub"><span>${Number.isFinite(power)?"Odczyt chwilowy z HAN":"Brak encji mocy chwilowej"}</span></div>
+            <div class="mini-trend"><svg viewBox="0 0 220 40" preserveAspectRatio="none" aria-hidden="true"><polyline class="mini-line" points="0,31 16,25 31,28 47,19 63,23 79,15 95,21 111,10 127,18 143,13 159,20 175,10 191,16 207,7 220,11"/></svg></div>
+          </article>
+
+          <article class="kpi orange">
+            <div class="kpi-top"><div class="kpi-icon">◉</div><span class="kpi-label">Koszt dzisiaj</span></div>
+            <div class="kpi-value">${fmtMoney(cost)}</div>
+            <div class="kpi-sub"><strong style="color:#ffc45c">Taryfa ${this._escape(String(tariff))}</strong><span>${Number.isFinite(cost)?"z danych Home Assistant":"Brak encji kosztu"}</span></div>
+          </article>
+
+          <article class="kpi green">
+            <div class="kpi-top"><div class="kpi-icon">⌁</div><span class="kpi-label">Ślad węglowy</span></div>
+            <div class="kpi-value">${fmtCo2(carbon)}</div>
+            <div class="kpi-sub"><strong style="color:#58eaa6">CO₂</strong><span>${Number.isFinite(carbon)?"Wartość z Home Assistant":"Brak encji CO₂"}</span></div>
+          </article>
+        </section>
+
+        <div class="main-grid">
+          <section class="panel-card">
+            <div class="card-head"><div><strong>Strefy taryfowe — ${this._escape(String(tariff))}</strong><span>Stan licznika i zużycie dzisiaj</span></div><div class="pill">Taryfa ${this._escape(String(tariff))}</div></div>
+            <div class="zone-grid">
+              <article class="zone z1"><span class="badge">T1 ☾</span><small>Strefa T1</small><b>${Number.isFinite(t1)?this._fmt(t1,0):"—"} <i>kWh</i></b><div class="zone-footer"><span>Dzisiaj</span><strong>${Number.isFinite(t1Daily)?this._fmt(t1Daily,1):"—"} kWh</strong></div></article>
+              <article class="zone z2"><span class="badge">T2 ☀</span><small>Strefa T2</small><b>${Number.isFinite(t2)?this._fmt(t2,0):"—"} <i>kWh</i></b><div class="zone-footer"><span>Dzisiaj</span><strong>${Number.isFinite(t2Daily)?this._fmt(t2Daily,1):"—"} kWh</strong></div></article>
+              <article class="zone z3"><span class="badge">T3 ◐</span><small>Strefa T3</small><b>${Number.isFinite(t3)?this._fmt(t3,0):"—"} <i>kWh</i></b><div class="zone-footer"><span>Dzisiaj</span><strong>${Number.isFinite(t3Daily)?this._fmt(t3Daily,1):"—"} kWh</strong></div></article>
+            </div>
+          </section>
+
+          <section class="panel-card">
+            <div class="card-head">
+              <div><strong>Zużycie energii</strong><span>Godzinowy profil · ${selectedLabel}</span></div>
+              <div style="display:flex;gap:5px">
+                <button class="refresh" data-energy-today title="Dzisiaj" aria-label="Dzisiaj">⌂</button>
+                <button class="refresh" data-energy-date="-1" title="Poprzedni dzień" aria-label="Poprzedni dzień">‹</button>
+                <button class="refresh" data-energy-date="1" title="Następny dzień" aria-label="Następny dzień" ${currentDate===selectedDate?"disabled":""}>›</button>
+              </div>
+            </div>
+            ${this._chartSvg()}
+          </section>
+        </div>
+
+        <div class="bottom-grid">
+          <section class="panel-card context">
+            <div class="card-head"><div><strong>Energetyczny Kompas PSE</strong><span>Prognoza na podstawie danych PSE i taryfy ${this._escape(String(tariff))}</span></div><div class="pill">${this._escape(String(tariff))}</div></div>
+            <div class="pse-grid">
+              ${this._pseCard("Dzisiaj","Energetyczne godziny szczytu",c.pse_today_entity)}
+              ${this._pseCard("Jutro · D+1","Planowane energetyczne godziny szczytu",c.pse_tomorrow_entity)}
+            </div>
+            <div class="pse-legend">
+              <span><i class="legend-darkgreen"></i>Zalecane użytkowanie</span><span><i class="legend-green"></i>Normalne użytkowanie</span><span><i class="legend-yellow"></i>Zalecane oszczędzanie</span><span><i class="legend-red"></i>Wymagane ograniczenie</span>
+            </div>
+          </section>
+
+          <section class="panel-card">
+            <div class="card-head"><div><strong>Statystyki</strong><span>Ostatnie 30 dni</span></div></div>
+            <div class="stats-list">
+              <div class="stat-row"><div class="stat-left"><i>▥</i>Średnie dzienne zużycie</div><strong>${Number.isFinite(dailyAverage)?this._fmt(dailyAverage,2):"—"} kWh</strong></div>
+              <div class="stat-row"><div class="stat-left"><i>↗</i>Najwyższe zużycie</div><strong>${Number.isFinite(max30)?this._fmt(max30,1):"—"} kWh</strong></div>
+              <div class="stat-row"><div class="stat-left"><i>↘</i>Najniższe zużycie</div><strong>${Number.isFinite(min30)?this._fmt(min30,1):"—"} kWh</strong></div>
+              <div class="stat-row"><div class="stat-left"><i>Σ</i>Łączne zużycie</div><strong>${Number.isFinite(total30)?this._fmt(total30,1):"—"} kWh</strong></div>
+            </div>
+          </section>
+
+          <section class="panel-card">
+            <div class="card-head"><div><strong>Informacje o liczniku</strong><span>eLicznik</span></div></div>
+            <div class="info-grid">
+              <div class="info"><div class="info-label">Model</div><div class="info-value">MA309M</div></div>
+              <div class="info"><div class="info-label">Numer licznika</div><div class="info-value">${this._escape(String(meterNumber))}</div></div>
+              <div class="info"><div class="info-label">Taryfa</div><div class="info-value">${this._escape(String(tariff))}</div></div>
+              <div class="info"><div class="info-label">Ostatni odczyt</div><div class="info-value">${this._date(lastReading)}</div></div>
+              <div class="info full"><div class="info-label">Status</div><div class="info-value"><span class="status-live-dot"></span>Połączony (HAN)</div></div>
+            </div>
+            <button class="refresh-wide" data-refresh title="Odśwież dane Tauron" aria-label="Odśwież dane Tauron" ${this._loading?"disabled":""}>↻&nbsp; Odśwież dane z eLicznik</button>
+          </section>
+        </div>
+
+        <footer class="footer">
+          <span>Źródło: /odczyty/api · /energia/api · PSE Energetyczny Kompas</span>
+          <span>Wybrany dzień: ${selectedDate} · Auto ${this._autoRefreshMinutes} min · Aktualizacja ${updated?this._date(updated):"—"}</span>
+        </footer>
+      </section>
+    `;
+  }
+}
+
+customElements.define("tauron-energy-card", TauronEnergyCard);
+
+window.customCards = window.customCards || [];
+window.customCards.push({
+  type: "tauron-energy-card",
+  name: "Tauron Energy Card",
+  description: "Nowoczesny panel Tauron eLicznik."
+});
   _chartSvg() {
     const history=this._chartHistorySeries()||[];
     const entry=this._selectedHistoryEntry();
