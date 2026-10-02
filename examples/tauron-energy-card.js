@@ -566,427 +566,292 @@ class TauronEnergyCard extends HTMLElement {
   }
 
   _render() {
-  if (!this.shadowRoot || !this._hass || !this._config.consumed_entity) return;
+    if (!this.shadowRoot || !this._hass || !this._config.consumed_entity) return;
 
-  const c = this._config;
-  const consumed = this._num(c.consumed_entity);
-  const exported = this._num(c.exported_entity);
-  const dailyConsumed = this._todayDailyConsumed();
-  const dailyExported = this._num(c.daily_exported_entity, NaN);
-  const dailyAverage = this._num(c.daily_average_entity, NaN);
-  const t1 = this._num(c.t1_entity, NaN);
-  const t2 = this._num(c.t2_entity, NaN);
-  const t3 = this._num(c.t3_entity, NaN);
-  const t1Daily = this._num(c.t1_daily_entity, NaN);
-  const t2Daily = this._num(c.t2_daily_entity, NaN);
-  const t3Daily = this._num(c.t3_daily_entity, NaN);
-  const balance = this._num(c.balance_entity);
-  const dailyBudget = this._num(c.daily_budget_entity, NaN);
-  const monthlyBudget = this._num(c.monthly_budget_entity, NaN);
-  const days = this._num(c.days_entity, NaN);
-  const billingStartConsumed = this._num(c.billing_start_consumed_entity, NaN);
-  const billingStartExported = this._num(c.billing_start_exported_entity, NaN);
-  const lastReading = this._state(c.last_reading_entity)?.state;
-  const lastFetch = this._state(c.last_fetch_entity)?.state;
-  const tariff = this._state(c.tariff_entity)?.state || "—";
-  const power = this._num(c.power_entity, NaN);
-  const cost = this._num(c.cost_entity, NaN);
-  const carbon = this._num(c.carbon_entity, NaN);
-  const updated = lastFetch || lastReading;
-  const balanceClass = balance < 0 ? "negative" : balance > 0 ? "positive" : "";
-  const budgetBase = Math.abs(dailyBudget);
-  const budgetPercent = budgetBase > 0 && Number.isFinite(dailyConsumed)
-    ? Math.min(100, Math.max(0, (dailyConsumed / budgetBase) * 100))
-    : 0;
-  const daysPercent = Number.isFinite(days) ? Math.max(0, Math.min(100, (days / 365) * 100)) : 0;
+    const c=this._config;
+    const consumed=this._num(c.consumed_entity,NaN);
+    const exported=this._num(c.exported_entity,NaN);
+    const dailyConsumed=this._todayDailyConsumed();
+    const dailyExported=this._num(c.daily_exported_entity,NaN);
+    const dailyAverage=this._num(c.daily_average_entity,NaN);
+    const t1=this._num(c.t1_entity,NaN), t2=this._num(c.t2_entity,NaN), t3=this._num(c.t3_entity,NaN);
+    const t1Daily=this._num(c.t1_daily_entity,NaN), t2Daily=this._num(c.t2_daily_entity,NaN), t3Daily=this._num(c.t3_daily_entity,NaN);
+    const balance=this._num(c.balance_entity,NaN);
+    const dailyBudget=this._num(c.daily_budget_entity,NaN);
+    const days=this._num(c.days_entity,NaN);
+    const lastReading=this._state(c.last_reading_entity)?.state;
+    const lastFetch=this._state(c.last_fetch_entity)?.state;
+    const tariff=this._state(c.tariff_entity)?.state||"—";
+    const power=this._num(c.power_entity,NaN);
+    const cost=this._num(c.cost_entity,NaN);
+    const carbon=this._num(c.carbon_entity,NaN);
+    const meterNumber=this._state(c.meter_number_entity)?.state||"—";
+    const updated=lastFetch||lastReading;
 
-  const fmtPower = value => Number.isFinite(value)
-    ? `${this._fmt(value,0)} W`
-    : "—";
-  const fmtCost = value => Number.isFinite(value) ? `${this._fmt(value,2)} zł` : "—";
-  const fmtCarbon = value => Number.isFinite(value) ? `${this._fmt(value,1)} kg CO₂` : "—";
+    const budgetBase=Math.abs(dailyBudget);
+    const budgetPercent=budgetBase>0&&Number.isFinite(dailyConsumed)?Math.min(100,Math.max(0,(dailyConsumed/budgetBase)*100)):0;
 
-  const currentDate = this._dateKey(new Date());
-  const selectedDate = this._selectedDate || currentDate;
-  const selectedLabel = this._dateLabel(selectedDate);
-  const historyForStats = this._chartHistorySeries() || [];
-  const historyValues = historyForStats.map(x => Number(x.value)).filter(Number.isFinite);
-  const minCandidates = historyValues.filter(v => v >= 0);
-  const maxDaily30 = historyValues.length ? Math.max(...historyValues) : NaN;
-  const minDaily30 = minCandidates.length ? Math.min(...minCandidates) : NaN;
-  const total30 = historyValues.length ? historyValues.reduce((sum, v) => sum + v, 0) : NaN;
-  const status = Number.isFinite(dailyConsumed) && dailyConsumed > 0 ? "W porządku" : "Brak danych";
+    const history=this._chartHistorySeries()||[];
+    const selectedDate=this._selectedDate||this._dateKey(new Date());
+    const selectedIndex=history.findIndex(x=>x.date===selectedDate);
+    const previous=selectedIndex>0?Number(history[selectedIndex-1]?.value):NaN;
+    const changePct=Number.isFinite(dailyConsumed)&&Number.isFinite(previous)&&previous>0
+      ?((dailyConsumed-previous)/previous)*100:NaN;
+    const changeText=Number.isFinite(changePct)
+      ? (changePct<=0?"↓":"↑")+" "+this._fmt(Math.abs(changePct),0)+"%"
+      : "Brak porównania";
 
-  this.shadowRoot.innerHTML = `
-    <style>
-      :host{
-        display:block;width:100%;color-scheme:dark;
-        --te-bg:#04111d;--te-panel:#081826;--te-card:#0b1d2c;--te-card2:#0e2234;
-        --te-border:#17354b;--te-border-2:#204864;--te-text:#edf7ff;--te-muted:#8ca7bd;
-        --te-blue:#299cff;--te-cyan:#5ee7ff;--te-green:#27dc84;--te-orange:#ff9b3d;
-        --te-purple:#9d63ff;--te-red:#ff5e70;--te-shadow:0 18px 50px rgba(0,0,0,.28);
-        font-family:Inter,Roboto,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
-      }
-      *{box-sizing:border-box}
-      .dashboard{
-        width:100%;padding:18px;border-radius:24px;
-        background:
-          radial-gradient(circle at 8% 0%,rgba(41,156,255,.13),transparent 28%),
-          radial-gradient(circle at 98% 12%,rgba(157,99,255,.10),transparent 22%),
-          linear-gradient(180deg,#061523 0%,#03101a 100%);
-        color:var(--te-text);box-shadow:var(--te-shadow);overflow:hidden;
-      }
-      .topbar{display:flex;align-items:center;justify-content:space-between;gap:16px;margin-bottom:14px}
-      .brand{display:flex;align-items:center;gap:10px;min-width:220px}
-      .brand-mark{
-        width:48px;height:48px;border-radius:15px;display:grid;place-items:center;
-        background:linear-gradient(145deg,#21153b,#471e69);border:1px solid #683e8f;
-        box-shadow:0 10px 30px rgba(123,73,255,.26)
-      }
-      .brand-mark svg{width:34px;height:34px;filter:drop-shadow(0 0 7px rgba(255,59,145,.28))}
-      .brand h1{margin:0;font-size:21px;letter-spacing:-.03em;line-height:1}
-      .brand h1 span{display:block;color:#ff3b93;font-size:16px;margin-top:2px}
-      .brand small{display:block;color:var(--te-muted);margin-top:5px;font-size:9px}
-      .nav{
-        display:flex;align-items:center;gap:5px;padding:5px;border:1px solid #19384e;
-        border-radius:999px;background:rgba(10,28,44,.8);box-shadow:inset 0 1px 0 rgba(255,255,255,.02)
-      }
-      .nav b{
-        padding:9px 24px;border-radius:999px;font-size:11px;color:#9bb4ca;font-weight:700;white-space:nowrap
-      }
-      .nav b.active{color:#fff;background:linear-gradient(180deg,#278fe9,#1972c5);box-shadow:0 0 28px rgba(41,156,255,.38)}
-      .connection{
-        min-width:220px;display:flex;align-items:center;justify-content:center;gap:9px;
-        padding:10px 14px;border:1px solid #1a3b51;border-radius:16px;background:rgba(11,30,45,.72)
-      }
-      .connection i{width:10px;height:10px;border-radius:50%;background:#26dd7d;box-shadow:0 0 0 5px rgba(38,221,125,.10)}
-      .connection strong{font-size:11px;color:#f4fbff}
-      .connection span{display:block;font-size:8px;color:var(--te-muted);margin-top:2px}
-      .refresh{
-        width:34px;height:34px;border:1px solid #1b3d55;background:#0b2235;color:#d9edff;border-radius:11px;
-        font-size:18px;cursor:pointer;transition:.18s ease
-      }
-      .refresh:hover{border-color:#318fd5;background:#102d43}
-      .refresh:focus-visible,button:focus-visible,select:focus-visible{outline:2px solid var(--te-cyan);outline-offset:2px}
-      .spin{display:inline-block;animation:spin 1s linear infinite}
-      @keyframes spin{to{transform:rotate(360deg)}}
+    const statsValues=history.map(x=>Number(x.value)).filter(Number.isFinite);
+    const max30=statsValues.length?Math.max(...statsValues):NaN;
+    const min30=statsValues.length?Math.min(...statsValues):NaN;
+    const total30=statsValues.length?statsValues.reduce((sum,v)=>sum+v,0):NaN;
 
-      .scene{position:relative;margin-bottom:14px;overflow:hidden;border:1px solid #173b55;border-radius:18px;background:#061624;box-shadow:0 14px 40px rgba(0,0,0,.22)}
-      .scene-topbar{position:absolute;z-index:6;left:18px;right:18px;top:14px;display:flex;justify-content:space-between;gap:12px;align-items:flex-start;text-shadow:0 2px 12px rgba(0,0,0,.7)}
-      .scene-topbar>div:first-child{display:flex;flex-direction:column;gap:2px}
-      .scene-kicker{font-size:8px;font-weight:900;letter-spacing:.15em;color:#6dd7ff}.scene-topbar strong{font-size:13px;color:#eef9ff}.scene-topbar span{font-size:8px;color:#b2c8dc}
-      .scene-status{display:flex;align-items:center;gap:7px;padding:7px 10px;border-radius:999px;background:rgba(3,17,28,.78);border:1px solid rgba(87,145,180,.35);font-size:9px;font-weight:800;white-space:nowrap}
-      .scene-status i{width:7px;height:7px;border-radius:50%;background:#a8b9c8}.flow-live .scene-status{color:#71efad;border-color:rgba(39,220,132,.35)}
-      .flow-live .scene-status i{background:#27dc84;box-shadow:0 0 12px rgba(39,220,132,.8);animation:sceneStatusPulse 1.8s ease-out infinite}
-      @keyframes sceneStatusPulse{0%{transform:scale(.85);box-shadow:0 0 0 0 rgba(39,220,132,.35)}70%{transform:scale(1);box-shadow:0 0 0 8px rgba(39,220,132,0)}100%{box-shadow:0 0 0 0 rgba(39,220,132,0)}}
-      .scene-art{position:relative;width:100%;aspect-ratio:1250/233;overflow:hidden;background:#061624;isolation:isolate}
-      .scene-art img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;object-position:center;display:block}
-      .scene-cover{position:absolute;inset:0;z-index:2;width:100%;height:100%;pointer-events:none;overflow:hidden}
-      .scene-cover path{fill:none;stroke:#061623;stroke-width:15;stroke-linecap:round;opacity:.96;filter:blur(2px)}
-      .scene-motion{position:absolute;inset:0;z-index:4;width:100%;height:100%;display:block;pointer-events:none;overflow:hidden}
-      .scene-motion-line{fill:none;stroke:#62d9ff;stroke-width:2.1;stroke-linecap:round;opacity:.22;filter:url(#sceneArrowGlow)}
-      .scene-arrows{display:none}.flow-live .scene-arrows{display:block}
-      .energy-arrow{opacity:0}.flow-live .energy-arrow{opacity:1}
-      .energy-arrow path{fill:none;stroke:#d8fbff;stroke-width:3.2;stroke-linecap:round;stroke-linejoin:round;filter:url(#sceneArrowGlow)}
-      .scene-meter-live{position:absolute;z-index:5;left:38.1%;top:39.5%;width:6.1%;height:17%;display:flex;align-items:center;justify-content:center;flex-direction:column;background:linear-gradient(180deg,rgba(238,250,255,.98),rgba(207,237,242,.97));border:1px solid rgba(54,93,112,.68);border-radius:7px;box-shadow:0 0 10px rgba(58,205,255,.18);color:#132b3a;line-height:1}
-      .scene-meter-live strong{font:800 clamp(7px,1vw,15px)/1 monospace;letter-spacing:.02em}.scene-meter-live span{margin-top:2px;font:800 clamp(4px,.4vw,7px)/1 system-ui;color:#516b79}
-      .scene-data-strip{position:absolute;z-index:6;left:50%;bottom:8%;transform:translateX(-50%);display:flex;align-items:center;justify-content:center;gap:7px;max-width:94%;padding:5px 8px;border:1px solid rgba(111,193,231,.3);border-radius:999px;background:rgba(3,18,29,.72);backdrop-filter:blur(6px);box-shadow:0 5px 16px rgba(0,0,0,.24);color:#c4d9e6;font-size:7px;white-space:nowrap}
-      .scene-data-strip span{padding:0 5px;border-right:1px solid rgba(142,191,216,.2)}.scene-data-strip span:last-child{border-right:0}.scene-data-strip b{color:#f0f8fc;margin-right:2px}
-      .scene-vignette{position:absolute;z-index:1;inset:0;pointer-events:none;background:linear-gradient(90deg,rgba(2,11,20,.07),transparent 24%,transparent 76%,rgba(2,11,20,.07))}
-      .scene-bottom{position:relative;z-index:6;display:flex;align-items:center;justify-content:space-between;gap:12px;padding:9px 14px;border-top:1px solid #17384e;background:#06131e;font-size:8px;color:#91aabd}
-      .scene-bottom span{display:flex;align-items:center;gap:6px}.scene-bottom strong{color:#e8f5ff;font-size:9px}.flow-dot{display:inline-block;width:6px;height:6px;border-radius:50%;background:#36d8ff;box-shadow:0 0 8px rgba(54,216,255,.65)}
-      .kpi-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;margin-bottom:14px}
-      .kpi{
-        min-height:150px;padding:16px;border-radius:16px;border:1px solid #17354b;
-        background:linear-gradient(180deg,#0a1d2c,#071827);box-shadow:0 10px 24px rgba(0,0,0,.16);overflow:hidden;position:relative
-      }
-      .kpi::after{content:"";position:absolute;width:130px;height:130px;right:-55px;top:-55px;border-radius:50%;background:radial-gradient(circle,rgba(41,156,255,.10),transparent 70%)}
-      .kpi-top{display:flex;align-items:center;justify-content:space-between;gap:9px}
-      .kpi-icon{
-        width:36px;height:36px;border-radius:12px;display:grid;place-items:center;font-size:18px;
-        background:#0d2b43;border:1px solid #1f4a67;color:#64ceff;box-shadow:inset 0 0 20px rgba(41,156,255,.08)
-      }
-      .kpi.orange .kpi-icon{background:#30200e;border-color:#64451f;color:#ffc04b}.kpi.green .kpi-icon{background:#082a1d;border-color:#174e37;color:#5deca8}.kpi.purple .kpi-icon{background:#211536;border-color:#50327a;color:#bf91ff}
-      .kpi-label{color:#9db6ca;font-size:11px}
-      .kpi-value{margin-top:13px;font-size:31px;font-weight:900;letter-spacing:-.035em;line-height:1}
-      .kpi-value small{font-size:13px;color:#9fb7cb;font-weight:700;letter-spacing:0}
-      .kpi-sub{margin-top:9px;color:#a7bdd0;font-size:9px}
-      .kpi-sub strong{display:block;color:#65ebaa;font-size:9px;margin-top:3px}
-      .kpi-bar{position:absolute;left:16px;right:16px;bottom:15px;height:6px;border-radius:99px;background:#102c41;overflow:hidden}
-      .kpi-bar i{display:block;height:100%;border-radius:inherit;background:linear-gradient(90deg,#31a6ff,#6de5ff);max-width:100%}
-      .kpi.orange .kpi-bar i{background:linear-gradient(90deg,#ff9c3a,#ffd071)}.kpi.green .kpi-bar i{background:linear-gradient(90deg,#28d883,#83f4bd)}
-      .kpi.purple .kpi-bar i{background:linear-gradient(90deg,#9554ff,#c49aff)}
+    const fmtP=value=>Number.isFinite(value)?this._fmt(value,0)+" W":"— W";
+    const fmtMoney=value=>Number.isFinite(value)?this._fmt(value,2)+" zł":"—";
+    const fmtCo2=value=>Number.isFinite(value)?this._fmt(value,1)+" kg CO₂":"—";
+    const currentDate=this._dateKey(new Date());
+    const selectedLabel=this._dateLabel(selectedDate);
 
-      .main-grid{display:grid;grid-template-columns:minmax(0,1.08fr) minmax(0,1fr);gap:12px;margin-bottom:12px}
-      .panel-card{border:1px solid #17354b;border-radius:17px;background:linear-gradient(180deg,#091b29,#071725);padding:16px;box-shadow:0 10px 26px rgba(0,0,0,.16)}
-      .card-head{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:13px}
-      .card-head strong{font-size:15px;letter-spacing:-.015em}
-      .card-head span{display:block;color:#859fb4;font-size:9px;margin-top:2px}
-      .pill{padding:7px 10px;border:1px solid #204966;border-radius:999px;background:#0c2b45;color:#61c8ff;font-size:9px;font-weight:900}
-      .zone-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:9px}
-      .zone{
-        border:1px solid #193c53;border-radius:14px;padding:13px;background:linear-gradient(180deg,#0a2030,#071825);min-width:0
-      }
-      .zone .badge{
-        display:inline-flex;align-items:center;justify-content:center;min-width:42px;height:25px;padding:0 10px;
-        border-radius:9px;font-size:10px;font-weight:900
-      }
-      .z1 .badge{background:#14365e;color:#69c3ff;border:1px solid #225b94}.z2 .badge{background:#3c2a10;color:#ffc45c;border:1px solid #795421}.z3 .badge{background:#312052;color:#bf96ff;border:1px solid #65419b}
-      .zone small{display:block;color:#7994aa;font-size:8px;margin-top:7px}.zone>b{display:block;margin-top:8px;font-size:20px}.zone>b i{font-style:normal;font-size:10px;color:#8ba5ba}
-      .zone-footer{display:flex;justify-content:space-between;gap:8px;margin-top:12px;padding-top:9px;border-top:1px solid #17354a;color:#7993a9;font-size:8px}
-      .zone-footer strong{color:#e3f1fb;font-size:11px}
+    this.shadowRoot.innerHTML=String.raw\`
+      <style>
+        :host{
+          display:block;width:100%;color-scheme:dark;
+          --bg:#030f19;--panel:#071a28;--panel2:#0a2030;--card:#0a1e2d;
+          --border:#153b53;--text:#edf8ff;--muted:#8ca7bb;
+          --blue:#2ea2ff;--cyan:#61e7ff;--green:#27df85;--orange:#ff9b3d;--purple:#9b63ff;
+          font-family:Inter,Roboto,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
+        }
+        *{box-sizing:border-box}
+        .dashboard{
+          width:100%;padding:16px;border-radius:24px;overflow:hidden;color:var(--text);
+          background:
+            radial-gradient(circle at 7% 0%,rgba(46,162,255,.12),transparent 27%),
+            radial-gradient(circle at 96% 0%,rgba(155,99,255,.09),transparent 22%),
+            linear-gradient(180deg,#061523 0%,#030e17 100%);
+          box-shadow:0 18px 55px rgba(0,0,0,.3)
+        }
+        .topbar{display:flex;align-items:center;justify-content:space-between;gap:18px;margin-bottom:13px}
+        .brand{display:flex;align-items:center;gap:11px;min-width:220px}
+        .brand-mark{
+          width:48px;height:48px;border-radius:15px;display:grid;place-items:center;
+          background:linear-gradient(145deg,#18133a,#531e70);border:1px solid #693f93;
+          box-shadow:0 10px 28px rgba(117,51,163,.22)
+        }
+        .brand-mark svg{width:34px;height:34px;filter:drop-shadow(0 0 7px rgba(255,59,145,.25))}
+        .brand h1{margin:0;font-size:20px;line-height:1;font-weight:900;letter-spacing:-.03em}
+        .brand h1 span{display:block;color:#ff3b91;font-size:15px;margin-top:3px}
+        .brand small{display:block;color:var(--muted);font-size:8px;margin-top:5px}
+        .nav{display:flex;align-items:center;gap:4px;padding:5px;border:1px solid #173b53;border-radius:999px;background:#081b2a}
+        .nav b{padding:10px 24px;border-radius:999px;font-size:10px;color:#98b2c7;white-space:nowrap}
+        .nav b.active{color:#fff;background:linear-gradient(180deg,#2b98f0,#176fc1);box-shadow:0 0 25px rgba(43,152,240,.34)}
+        .top-actions{display:flex;align-items:center;gap:8px}
+        .connection{display:flex;align-items:center;gap:8px;padding:10px 12px;min-width:220px;border:1px solid #193d54;border-radius:15px;background:rgba(8,28,42,.82)}
+        .connection i{width:10px;height:10px;border-radius:50%;background:#29df83;box-shadow:0 0 0 5px rgba(41,223,131,.08)}
+        .connection strong{display:block;font-size:10px}.connection span{display:block;margin-top:2px;color:var(--muted);font-size:7px}
+        button{font:inherit}
+        .refresh{width:36px;height:36px;border-radius:11px;border:1px solid #1b4058;background:#0a2132;color:#dff5ff;cursor:pointer;font-size:18px}
+        .refresh:hover{border-color:#2c91d5;background:#0e2b40}
+        button:focus-visible{outline:2px solid var(--cyan);outline-offset:2px}
+        .spin{display:inline-block;animation:spin 1s linear infinite}@keyframes spin{to{transform:rotate(360deg)}
 
-      .chart-wrap{position:relative;width:100%;height:250px}
-      .chart-wrap svg{display:block;width:100%;height:100%;overflow:visible}
-      .grid{stroke:#163349;stroke-width:1}.axis,.y-axis{fill:#7894aa;font-size:9px}.area-consumed{fill:url(#energyFill)}
-      .line-consumed{fill:none;stroke:#32a5ff;stroke-width:3;stroke-linecap:round;stroke-linejoin:round;filter:drop-shadow(0 0 5px rgba(50,165,255,.28))}
-      .line-exported{fill:none;stroke:#2dd787;stroke-width:2.5;stroke-linecap:round;stroke-linejoin:round}
-      .dot-consumed{fill:#38a7ff;stroke:#071726;stroke-width:3}.dot-exported{fill:#35d88b;stroke:#071726;stroke-width:3}
-      .chart-point{cursor:pointer;transition:r .12s ease}.chart-point:hover{r:7}
-      .chart-tooltip{
-        position:absolute;z-index:5;min-width:145px;padding:9px 11px;border-radius:10px;
-        background:#0a1a29;color:#fff;border:1px solid #234864;box-shadow:0 12px 28px rgba(0,0,0,.36);pointer-events:none;font-size:11px
-      }
-      .chart-tooltip[hidden]{display:none}.chart-tooltip strong,.chart-tooltip span,.chart-tooltip b{display:block}
-      .chart-tooltip span{margin-top:3px;color:#9eb6ca}.chart-tooltip b{margin-top:4px;font-size:13px}
-      .legend{display:flex;gap:18px;flex-wrap:wrap;color:#86a0b5;font-size:9px;margin-top:4px}
-      .legend i{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:5px}.legend .c{background:#38a7ff}.legend .e{background:#35d88b}
+        .scene{position:relative;margin-bottom:13px;border:1px solid #183e56;border-radius:17px;overflow:hidden;background:#061624;box-shadow:0 12px 35px rgba(0,0,0,.24)}
+        .scene-topbar{position:absolute;z-index:7;left:16px;right:16px;top:13px;display:flex;justify-content:space-between;gap:10px;text-shadow:0 2px 12px rgba(0,0,0,.8)}
+        .scene-kicker{font-size:7px;font-weight:900;letter-spacing:.15em;color:#69ddff}.scene-topbar strong{display:block;font-size:12px}.scene-topbar span{display:block;margin-top:2px;font-size:7px;color:#b7cddd}
+        .scene-status{display:flex;align-items:center;gap:6px;padding:6px 9px;border:1px solid rgba(74,149,187,.35);border-radius:999px;background:rgba(3,17,27,.72);font-size:8px;font-weight:800;white-space:nowrap}
+        .scene-status i{width:6px;height:6px;border-radius:50%;background:#9aacbb}.flow-live .scene-status{color:#6ef0ad;border-color:rgba(39,223,133,.35)}.flow-live .scene-status i{background:#27df85;box-shadow:0 0 10px rgba(39,223,133,.8);animation:statusPulse 1.7s ease-out infinite}
+        @keyframes statusPulse{0%{box-shadow:0 0 0 0 rgba(39,223,133,.3)}70%{box-shadow:0 0 0 7px rgba(39,223,133,0)}100%{box-shadow:0 0 0 0 rgba(39,223,133,0)}
+        .scene-art{position:relative;width:100%;aspect-ratio:1250/233;overflow:hidden;line-height:0}
+        .scene-art img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;display:block}
+        .scene-motion{position:absolute;inset:0;z-index:4;width:100%;height:100%;display:block;overflow:hidden;pointer-events:none}
+        .scene-motion-line{fill:none;stroke:#6cddff;stroke-width:2;stroke-linecap:round;opacity:.18;stroke-dasharray:10 18}
+        .flow-live .scene-motion-line{animation:flowDash 1.6s linear infinite}
+        @keyframes flowDash{to{stroke-dashoffset:-56}
+        .scene-arrows{display:none}.flow-live .scene-arrows{display:block}
+        .energy-arrow path{fill:none;stroke:#d9fbff;stroke-width:3.2;stroke-linecap:round;stroke-linejoin:round;filter:url(#sceneArrowGlow)}
+        .scene-meter-live{
+          position:absolute;z-index:5;left:38.1%;top:39.5%;width:6.1%;height:17%;
+          display:flex;align-items:center;justify-content:center;flex-direction:column;
+          border:1px solid rgba(65,97,111,.72);border-radius:6px;
+          background:linear-gradient(180deg,rgba(241,252,255,.98),rgba(205,236,241,.98));
+          box-shadow:0 0 10px rgba(58,205,255,.16);color:#122b38
+        }
+        .scene-meter-live strong{font:800 clamp(8px,1.05vw,16px)/1 monospace;letter-spacing:.02em}.scene-meter-live span{margin-top:2px;font:800 clamp(4px,.42vw,7px)/1 system-ui;color:#526b78}
+        .scene-data-strip{
+          position:absolute;z-index:6;left:50%;bottom:5%;transform:translateX(-50%);
+          display:flex;align-items:center;justify-content:center;gap:4px;max-width:92%;padding:4px 7px;
+          border:1px solid rgba(123,200,234,.26);border-radius:999px;background:rgba(3,18,29,.72);
+          backdrop-filter:blur(6px);color:#c7dbe6;font-size:6px;white-space:nowrap;line-height:1.1
+        }
+        .scene-data-strip span{padding:0 5px;border-right:1px solid rgba(142,191,216,.18)}.scene-data-strip span:last-child{border-right:0}.scene-data-strip b{color:#f1f8fd}
+        .scene-vignette{position:absolute;z-index:2;inset:0;pointer-events:none;background:linear-gradient(90deg,rgba(2,11,20,.08),transparent 22%,transparent 78%,rgba(2,11,20,.08))}
+        .scene-bottom{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:8px 12px;border-top:1px solid #18384f;background:#06131e;color:#8da8bb;font-size:7px}
+        .scene-bottom span{display:flex;align-items:center;gap:5px}.scene-bottom strong{font-size:8px;color:#e7f4fb}.flow-dot{width:6px;height:6px;border-radius:50%;background:#38d8ff;box-shadow:0 0 8px rgba(56,216,255,.65)}
 
-      .context{margin-bottom:12px}
-      .pse-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
-      .pse-card{padding:13px;border:1px solid #19394f;border-radius:14px;background:#081b2a}
-      .pse-card-head{display:flex;justify-content:space-between;gap:10px;align-items:flex-start}
-      .pse-card-head strong{display:block;font-size:11px;color:#e8f5ff}.pse-card-head span{display:block;margin-top:2px;font-size:8px;color:#7d98ad}
-      .pse-card-head>b{padding:5px 8px;border-radius:999px;font-size:8px;white-space:nowrap;background:#10283a;color:#91a8ba}
-      .pse-card-head>b.pse-darkgreen{background:#093523;color:#6ce7ab}.pse-card-head>b.pse-green{background:#0f3023;color:#8dd9af}
-      .pse-card-head>b.pse-yellow{background:#3b2d0b;color:#ffd15f}.pse-card-head>b.pse-red{background:#3a1720;color:#ff8797}
-      .pse-timeline{display:grid;grid-template-columns:repeat(24,minmax(0,1fr));gap:3px;margin-top:11px}
-      .pse-hour{text-align:center;min-width:0}.pse-hour span{display:block;color:#708ca2;font-size:6px;margin-bottom:3px}.pse-hour i{display:block;height:18px;border-radius:4px;background:#1a3141}
-      .pse-hour.pse-darkgreen i{background:#25be79}.pse-hour.pse-green i{background:#6ebe92}.pse-hour.pse-yellow i{background:#e9b63f}.pse-hour.pse-red i{background:#dd5968}
-      .pse-empty{grid-column:1/-1;padding:11px 0;color:#7893a8;font-size:9px}
-      .pse-legend{display:flex;gap:13px;flex-wrap:wrap;margin-top:9px;color:#7893a8;font-size:8px}.pse-legend span{display:inline-flex;align-items:center;gap:5px}.pse-legend i{width:7px;height:7px;border-radius:50%}
-      .legend-darkgreen{background:#25be79}.legend-green{background:#6ebe92}.legend-yellow{background:#e9b63f}.legend-red{background:#dd5968}
+        .kpi-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:11px;margin-bottom:12px}
+        .kpi{
+          min-height:158px;padding:15px;border:1px solid #17384e;border-radius:15px;position:relative;overflow:hidden;
+          background:linear-gradient(180deg,#0a1f2e,#071825);box-shadow:0 9px 22px rgba(0,0,0,.15)
+        }
+        .kpi.orange{background:linear-gradient(180deg,#101f2b,#081722)}.kpi.green{background:linear-gradient(180deg,#0a211d,#071921)}
+        .kpi-top{display:flex;align-items:center;gap:10px}.kpi-icon{width:36px;height:36px;border-radius:11px;display:grid;place-items:center;border:1px solid #214c67;background:#0d2c43;color:#5fcfff;font-size:18px}
+        .kpi.orange .kpi-icon{background:#33200d;border-color:#674720;color:#ffc04d}.kpi.green .kpi-icon{background:#092a1e;border-color:#18513a;color:#5deba8}
+        .kpi-label{color:#9db5c9;font-size:10px}.kpi-value{margin-top:15px;font-size:30px;font-weight:900;letter-spacing:-.04em;line-height:1}.kpi-value small{font-size:12px;color:#9fb7ca;font-weight:700}
+        .kpi-sub{margin-top:8px;color:#91aabd;font-size:8px;display:flex;flex-direction:column;gap:3px}.kpi-sub strong{color:#5febaa;font-size:9px}.kpi-sub strong.up{color:#ff9e60}.kpi-sub span{color:#809aae}
+        .kpi-bar{position:absolute;left:15px;right:15px;bottom:14px;height:6px;border-radius:999px;background:#102d42;overflow:hidden}.kpi-bar i{display:block;height:100%;border-radius:inherit;background:linear-gradient(90deg,#2ca4ff,#62e2ff)}
+        .mini-trend{height:36px;margin-top:8px}.mini-trend svg{width:100%;height:100%;display:block}.mini-line{fill:none;stroke:#34dc8a;stroke-width:2.1;stroke-linecap:round}
 
-      .bottom-grid{display:grid;grid-template-columns:1.15fr .85fr;gap:12px}
-      .stats-list{display:grid;gap:4px}
-      .stat-row{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:11px 0;border-bottom:1px solid #153247}
-      .stat-row:last-child{border-bottom:0}.stat-left{display:flex;align-items:center;gap:9px;color:#87a1b6;font-size:10px}.stat-left i{width:28px;height:28px;border-radius:9px;display:grid;place-items:center;background:#0d2c40;color:#59c7ff}
-      .stat-row:nth-child(2) .stat-left i{color:#3fe8ff}.stat-row:nth-child(3) .stat-left i{color:#ff7a8b}.stat-row:nth-child(4) .stat-left i{color:#c285ff}
-      .stat-row strong{font-size:12px;color:#e7f3fb;white-space:nowrap}
-      .info-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}
-      .info{padding:10px;border:1px solid #17364b;background:#081b2a;border-radius:11px}.info-label{color:#748fa4;font-size:7px;text-transform:uppercase;letter-spacing:.08em}.info-value{margin-top:5px;color:#e6f3fc;font-size:10px;font-weight:800}
-      .status-live-dot{display:inline-block;width:7px;height:7px;border-radius:50%;background:#27dc84;box-shadow:0 0 9px rgba(39,220,132,.7);margin-right:5px}
-      .full{grid-column:1/-1}
-      .refresh-wide{width:100%;margin-top:10px;height:39px;border-radius:10px;border:1px solid #20527a;background:#0b2b44;color:#cdeaff;font-weight:800;cursor:pointer}
-      .refresh-wide:hover{background:#0e3755}
-      .footer{display:flex;justify-content:space-between;gap:12px;color:#668399;font-size:8px;padding:9px 2px 0}
-      .muted{color:#7f99ad}.data-missing{color:#778fa3;font-weight:700}
-      .mini-trend{height:40px;margin-top:11px}.mini-trend svg{width:100%;height:100%;display:block}
-      .mini-line{fill:none;stroke:#33dc8b;stroke-width:2.2;stroke-linecap:round}.mini-fill{fill:url(#miniFill)}
-      .cost-note,.carbon-note{margin-top:6px;font-size:8px;color:#718b9f}
-      .budget-ring{display:none}
-      .budget-ring::before{content:"";position:absolute;inset:5px;background:#091a29;border-radius:50%}.budget-ring span{position:relative;font-size:9px;font-weight:900}
+        .main-grid{display:grid;grid-template-columns:minmax(0,1.08fr) minmax(0,1fr);gap:12px;margin-bottom:12px}
+        .panel-card{min-width:0;border:1px solid #17384f;border-radius:17px;background:linear-gradient(180deg,#091d2b,#071724);padding:15px;box-shadow:0 10px 25px rgba(0,0,0,.15)}
+        .card-head{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:11px}.card-head strong{font-size:14px;letter-spacing:-.015em}.card-head span{display:block;color:#7f9bad;font-size:8px;margin-top:2px}
+        .pill{padding:7px 10px;border-radius:999px;border:1px solid #1f506d;background:#0b2b43;color:#65caff;font-size:9px;font-weight:900}
+        .zone-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
+        .zone{padding:12px;border:1px solid #193e57;border-radius:13px;background:linear-gradient(180deg,#0a2030,#071824);min-width:0}
+        .zone .badge{display:inline-flex;align-items:center;justify-content:center;min-width:44px;height:26px;padding:0 10px;border-radius:9px;font-size:10px;font-weight:900}
+        .z1 .badge{background:linear-gradient(180deg,#1686f7,#126acb);color:#fff;border:1px solid #38aaff;box-shadow:0 0 15px rgba(46,162,255,.24)}
+        .z2 .badge{background:linear-gradient(180deg,#ffad43,#f27c1e);color:#fff;border:1px solid #ffc467;box-shadow:0 0 15px rgba(255,155,61,.18)}
+        .z3 .badge{background:linear-gradient(180deg,#aa6aff,#7d42d8);color:#fff;border:1px solid #bb8eff;box-shadow:0 0 15px rgba(155,99,255,.2)}
+        .z1{border-color:#173f64}.z2{border-color:#5c421f}.z3{border-color:#49306f}
+        .zone small{display:block;color:#7d99ad;font-size:8px;margin-top:7px}.zone>b{display:block;margin-top:9px;font-size:20px;letter-spacing:-.02em}.zone>b i{font-style:normal;font-size:9px;color:#8da7ba}
+        .zone-footer{display:flex;justify-content:space-between;align-items:center;gap:7px;margin-top:10px;padding-top:9px;border-top:1px solid #18364a;color:#7d98ac;font-size:8px}.zone-footer strong{font-size:10px}
+        .z1 .zone-footer strong{color:#5ec2ff}.z2 .zone-footer strong{color:#ffb65f}.z3 .zone-footer strong{color:#c09aff}
 
-      @media(prefers-reduced-motion:reduce){
-        .flow-live .scene-status i,.scene-pulses .pulse,.motion-pulses circle,.scene-arrows .energy-arrow,.scene-shine,.spin{animation:none!important}
-      }
-      @media(max-width:1050px){
-        .nav b{padding:9px 16px}.connection{min-width:170px}.kpi-grid{grid-template-columns:repeat(2,1fr)}
-        .main-grid,.bottom-grid{grid-template-columns:1fr}
-      }
-      @media(max-width:700px){
-        .dashboard{padding:10px;border-radius:18px}.topbar{align-items:flex-start}.nav{display:none}.connection{min-width:0;padding:8px}.connection span{display:none}
-        .brand{min-width:0}.brand-mark{width:42px;height:42px}.brand h1{font-size:18px}.brand h1 span{font-size:14px}
-        .scene-topbar{left:12px;right:12px;top:10px}.scene-topbar strong{font-size:10px}.scene-status{padding:6px 8px;font-size:8px}.scene-art{min-height:0}.scene-data-strip{bottom:6%;gap:2px;padding:4px 5px;font-size:5.2px}.scene-data-strip span{padding:0 3px}.scene-meter-live{top:30%;height:22%}
-        .scene-bottom{align-items:flex-start;flex-direction:column}.kpi-grid{grid-template-columns:1fr 1fr}.kpi{min-height:135px;padding:13px}.kpi-value{font-size:24px}
-        .zone-grid,.pse-grid{grid-template-columns:1fr}.info-grid{grid-template-columns:1fr}.footer{flex-direction:column}.chart-wrap{height:220px}
-      }
-    </style>
+        .chart-inner{position:relative;width:100%;height:252px}.chart-summary{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:3px}.chart-summary>div:first-child{display:flex;align-items:baseline;gap:9px;flex-wrap:wrap}
+        .chart-summary strong{font-size:27px;letter-spacing:-.04em}.chart-summary span{font-size:8px;color:#7894aa}.chart-summary em{font-style:normal;color:#59eba7;font-size:9px;font-weight:900}.chart-summary em.up{color:#ff9e60}
+        .chart-tabs{display:flex;align-items:center;gap:3px;padding:4px;background:#0a1b2a;border:1px solid #183a51;border-radius:999px}.chart-tab{border:0;background:transparent;color:#8ca6b9;border-radius:999px;padding:7px 10px;font-size:8px;cursor:pointer}.chart-tab.active{color:#fff;background:linear-gradient(180deg,#2a98f0,#176fc1);box-shadow:0 0 18px rgba(42,152,240,.28)}
+        .chart-inner svg{width:100%;height:210px;display:block;overflow:visible}.chart-grid{stroke:#17364b;stroke-width:1}.chart-axis-y,.chart-axis-x{fill:#7894a9;font-size:8px}
+        .hourbar{outline:none}.hourbar rect{transition:filter .15s ease,transform .15s ease;transform-box:fill-box;transform-origin:center bottom}.hourbar:hover rect,.hourbar:focus rect{filter:brightness(1.2);transform:scaleY(1.025)}
+        .bar-t1{fill:#2e9fff;filter:drop-shadow(0 0 4px rgba(46,159,255,.22))}.bar-t2{fill:#ff9b3d;filter:drop-shadow(0 0 4px rgba(255,155,61,.18))}.bar-t3{fill:#9b63ff;filter:drop-shadow(0 0 4px rgba(155,99,255,.20))}
+        .chart-legend{display:flex;gap:16px;margin-top:-2px;color:#819bad;font-size:8px}.chart-legend span{display:inline-flex;align-items:center;gap:5px}.chart-legend i{width:7px;height:7px;border-radius:50%;display:inline-block}.legend-blue{background:#2e9fff}.legend-orange{background:#ff9b3d}.legend-purple{background:#9b63ff}
+        .chart-empty{height:220px;display:flex;flex-direction:column;align-items:center;justify-content:center;color:#7d98aa;gap:5px}.chart-empty strong{color:#dceaf4;font-size:11px}.chart-empty span{font-size:8px}
 
-    <section class="dashboard" aria-label="Tauron eLicznik">
-      <header class="topbar">
-        <div class="brand">
-          <div class="brand-mark" aria-hidden="true">
-            <svg viewBox="0 0 48 48">
-              <path d="M8 19c7-10 14-14 21-14 5 0 8 2 11 5-8-2-13 0-17 5 6 0 11 3 15 8-7-2-13-2-18 2 5 2 8 5 9 10-8-1-15-5-19-12-3-5-3-9-2-14z" fill="#ff3b91"/>
-              <path d="M8 19c4 5 10 8 18 8 5 0 10-1 14-4-2 7-8 12-16 14-6-1-11-4-15-9-3-4-3-6-1-9z" fill="#7b49ff" opacity=".92"/>
-            </svg>
+        .context{height:100%;margin:0}.pse-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}.pse-card{padding:10px;border:1px solid #193b52;border-radius:12px;background:#081b2a}.pse-card-head strong{font-size:10px}.pse-card-head span{font-size:7px}.pse-card-head>b{padding:5px 7px;font-size:7px}.pse-timeline{gap:2px;margin-top:9px}.pse-hour span{font-size:5px}.pse-hour i{width:12px;height:12px;border-radius:50%}
+        .pse-hour.pse-darkgreen i{background:#25c17a}.pse-hour.pse-green i{background:#71c493}.pse-hour.pse-yellow i{background:#e9b63f}.pse-hour.pse-red i{background:#dd5968}
+        .pse-legend{display:flex;gap:9px;flex-wrap:wrap;margin-top:8px;color:#7792a6;font-size:7px}.pse-legend i{width:6px;height:6px;border-radius:50%}.legend-darkgreen{background:#25c17a}.legend-green{background:#71c493}.legend-yellow{background:#e9b63f}.legend-red{background:#dd5968}
+
+        .bottom-grid{display:grid;grid-template-columns:minmax(0,1.45fr) minmax(230px,.88fr) minmax(230px,.92fr);gap:12px;align-items:stretch}
+        .stats-list{display:grid;gap:2px}.stat-row{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:9px 0;border-bottom:1px solid #143247}.stat-row:last-child{border-bottom:0}.stat-left{display:flex;align-items:center;gap:8px;color:#89a2b5;font-size:8px}.stat-left i{width:28px;height:28px;border-radius:9px;background:#0c2a3d;display:grid;place-items:center;color:#55c7ff;font-size:12px}.stat-row:nth-child(2) .stat-left i{color:#62e4ff}.stat-row:nth-child(3) .stat-left i{color:#ff7e91}.stat-row:nth-child(4) .stat-left i{color:#c587ff}.stat-row strong{font-size:10px;white-space:nowrap}
+        .info-grid{display:grid;grid-template-columns:1fr 1fr;gap:7px}.info{padding:9px;border:1px solid #17384d;background:#081b2a;border-radius:10px}.info-label{color:#728da2;font-size:6px;text-transform:uppercase;letter-spacing:.09em}.info-value{margin-top:5px;color:#e6f3fb;font-size:9px;font-weight:800}.status-live-dot{display:inline-block;width:6px;height:6px;border-radius:50%;background:#27df85;box-shadow:0 0 8px rgba(39,223,133,.7);margin-right:4px}.full{grid-column:1/-1}
+        .refresh-wide{width:100%;height:38px;margin-top:9px;border:1px solid #20537a;border-radius:10px;background:#0a2d48;color:#d8effc;font-weight:800;font-size:9px;cursor:pointer}
+        .footer{display:flex;justify-content:space-between;gap:12px;padding:8px 2px 0;color:#648097;font-size:7px}
+
+        @media(prefers-reduced-motion:reduce){.flow-live .scene-status i,.flow-live .scene-motion-line,.scene-arrows,.spin{animation:none!important}
+        @media(max-width:1050px){.nav b{padding:9px 15px}.connection{min-width:160px}.bottom-grid{grid-template-columns:1fr 1fr}.bottom-grid .context{grid-column:1/-1}.kpi-grid{grid-template-columns:repeat(2,1fr)}.main-grid{grid-template-columns:1fr}
+        @media(max-width:700px){.dashboard{padding:10px}.topbar{align-items:flex-start}.nav{display:none}.connection{min-width:0;padding:8px}.connection span{display:none}.brand{min-width:0}.scene-topbar{left:10px;right:10px;top:9px}.scene-topbar strong{font-size:9px}.scene-status{padding:6px 7px;font-size:7px}.scene-data-strip{max-width:96%;font-size:5px}.scene-meter-live{left:38%;top:39%;width:6.4%;height:18%}.kpi-grid{grid-template-columns:1fr 1fr}.kpi{min-height:135px;padding:12px}.kpi-value{font-size:23px}.zone-grid,.pse-grid{grid-template-columns:1fr}.bottom-grid{grid-template-columns:1fr}.bottom-grid .context{grid-column:auto}.chart-tabs{display:none}.chart-inner{height:230px}.chart-inner svg{height:185px}.info-grid{grid-template-columns:1fr}.footer{flex-direction:column}
+      </style>
+
+      <section class="dashboard" aria-label="Tauron eLicznik">
+        <header class="topbar">
+          <div class="brand">
+            <div class="brand-mark" aria-hidden="true">
+              <svg viewBox="0 0 48 48">
+                <path d="M8 19c7-10 14-14 21-14 5 0 8 2 11 5-8-2-13 0-17 5 6 0 11 3 15 8-7-2-13-2-18 2 5 2 8 5 9 10-8-1-15-5-19-12-3-5-3-9-2-14z" fill="#ff3b91"/>
+                <path d="M8 19c4 5 10 8 18 8 5 0 10-1 14-4-2 7-8 12-16 14-6-1-11-4-15-9-3-4-3-6-1-9z" fill="#7b49ff" opacity=".92"/>
+              </svg>
+            </div>
+            <div><h1>TAURON <span>eLicznik</span></h1><small>${this._escape(c.title||"Energia")} · zużycie i analiza</small></div>
           </div>
-          <div>
-            <h1>TAURON <span>eLicznik</span></h1>
-            <small>${this._escape(c.title || "Energia")} · zużycie i analiza</small>
+          <nav class="nav" aria-label="Sekcje panelu"><b class="active">Energia</b><b>Analiza</b><b>Taryfa</b><b>Ustawienia</b></nav>
+          <div class="top-actions">
+            <div class="connection"><i></i><div><strong>Połączony</strong><span>${updated?this._date(updated):"Brak danych"}</span></div></div>
+            <button class="refresh" data-refresh title="Odśwież dane Tauron" aria-label="Odśwież dane Tauron" ${this._loading?"disabled":""}><span class="${this._loading?"spin":""}">↻</span></button>
           </div>
+        </header>
+
+        ${this._energyFlowSvg(dailyConsumed)}
+
+        <section class="kpi-grid" aria-label="Podsumowanie energii">
+          <article class="kpi">
+            <div class="kpi-top"><div class="kpi-icon">⌂</div><span class="kpi-label">Pobór dzisiaj</span></div>
+            <div class="kpi-value">${Number.isFinite(dailyConsumed)?this._fmt(dailyConsumed,2):"—"} <small>kWh</small></div>
+            <div class="kpi-sub"><strong class="${Number.isFinite(changePct)&&changePct>0?"up":""}">${this._escape(changeText)}</strong><span>porównanie z poprzednim dniem</span></div>
+            <div class="kpi-bar"><i style="width:${budgetPercent}%"></i></div>
+          </article>
+
+          <article class="kpi">
+            <div class="kpi-top"><div class="kpi-icon">⚡</div><span class="kpi-label">Moc chwilowa</span></div>
+            <div class="kpi-value">${Number.isFinite(power)?this._fmt(power,0):"—"} <small>W</small></div>
+            <div class="kpi-sub"><span>${Number.isFinite(power)?"Odczyt chwilowy z HAN":"Brak encji mocy chwilowej"}</span></div>
+            <div class="mini-trend"><svg viewBox="0 0 220 40" preserveAspectRatio="none" aria-hidden="true"><polyline class="mini-line" points="0,31 16,25 31,28 47,19 63,23 79,15 95,21 111,10 127,18 143,13 159,20 175,10 191,16 207,7 220,11"/></svg></div>
+          </article>
+
+          <article class="kpi orange">
+            <div class="kpi-top"><div class="kpi-icon">◉</div><span class="kpi-label">Koszt dzisiaj</span></div>
+            <div class="kpi-value">${fmtMoney(cost)}</div>
+            <div class="kpi-sub"><strong style="color:#ffc45c">Taryfa ${this._escape(String(tariff))}</strong><span>${Number.isFinite(cost)?"z danych Home Assistant":"Brak encji kosztu"}</span></div>
+          </article>
+
+          <article class="kpi green">
+            <div class="kpi-top"><div class="kpi-icon">⌁</div><span class="kpi-label">Ślad węglowy</span></div>
+            <div class="kpi-value">${fmtCo2(carbon)}</div>
+            <div class="kpi-sub"><strong style="color:#58eaa6">CO₂</strong><span>${Number.isFinite(carbon)?"Wartość z Home Assistant":"Brak encji CO₂"}</span></div>
+          </article>
+        </section>
+
+        <div class="main-grid">
+          <section class="panel-card">
+            <div class="card-head"><div><strong>Strefy taryfowe — ${this._escape(String(tariff))}</strong><span>Stan licznika i zużycie dzisiaj</span></div><div class="pill">Taryfa ${this._escape(String(tariff))}</div></div>
+            <div class="zone-grid">
+              <article class="zone z1"><span class="badge">T1 ☾</span><small>Strefa T1</small><b>${Number.isFinite(t1)?this._fmt(t1,0):"—"} <i>kWh</i></b><div class="zone-footer"><span>Dzisiaj</span><strong>${Number.isFinite(t1Daily)?this._fmt(t1Daily,1):"—"} kWh</strong></div></article>
+              <article class="zone z2"><span class="badge">T2 ☀</span><small>Strefa T2</small><b>${Number.isFinite(t2)?this._fmt(t2,0):"—"} <i>kWh</i></b><div class="zone-footer"><span>Dzisiaj</span><strong>${Number.isFinite(t2Daily)?this._fmt(t2Daily,1):"—"} kWh</strong></div></article>
+              <article class="zone z3"><span class="badge">T3 ◐</span><small>Strefa T3</small><b>${Number.isFinite(t3)?this._fmt(t3,0):"—"} <i>kWh</i></b><div class="zone-footer"><span>Dzisiaj</span><strong>${Number.isFinite(t3Daily)?this._fmt(t3Daily,1):"—"} kWh</strong></div></article>
+            </div>
+          </section>
+
+          <section class="panel-card">
+            <div class="card-head">
+              <div><strong>Zużycie energii</strong><span>Godzinowy profil · ${selectedLabel}</span></div>
+              <div style="display:flex;gap:5px">
+                <button class="refresh" data-energy-today title="Dzisiaj" aria-label="Dzisiaj">⌂</button>
+                <button class="refresh" data-energy-date="-1" title="Poprzedni dzień" aria-label="Poprzedni dzień">‹</button>
+                <button class="refresh" data-energy-date="1" title="Następny dzień" aria-label="Następny dzień" ${currentDate===selectedDate?"disabled":""}>›</button>
+              </div>
+            </div>
+            ${this._chartSvg()}
+          </section>
         </div>
 
-        <nav class="nav" aria-label="Sekcje panelu">
-          <b class="active">Energia</b><b>Analiza</b><b>Taryfa</b><b>Ustawienia</b>
-        </nav>
+        <div class="bottom-grid">
+          <section class="panel-card context">
+            <div class="card-head"><div><strong>Energetyczny Kompas PSE</strong><span>Prognoza na podstawie danych PSE i taryfy ${this._escape(String(tariff))}</span></div><div class="pill">${this._escape(String(tariff))}</div></div>
+            <div class="pse-grid">
+              ${this._pseCard("Dzisiaj","Energetyczne godziny szczytu",c.pse_today_entity)}
+              ${this._pseCard("Jutro · D+1","Planowane energetyczne godziny szczytu",c.pse_tomorrow_entity)}
+            </div>
+            <div class="pse-legend">
+              <span><i class="legend-darkgreen"></i>Zalecane użytkowanie</span><span><i class="legend-green"></i>Normalne użytkowanie</span><span><i class="legend-yellow"></i>Zalecane oszczędzanie</span><span><i class="legend-red"></i>Wymagane ograniczenie</span>
+            </div>
+          </section>
 
-        <div class="top-actions" style="display:flex;align-items:center;gap:8px">
-          <div class="connection">
-            <i></i>
-            <div><strong>Połączony</strong><span>Ostatnia aktualizacja · ${updated ? this._date(updated) : "brak danych"}</span></div>
-          </div>
-          <button class="refresh" title="Odśwież dane Tauron" aria-label="Odśwież dane Tauron" ${this._loading ? "disabled" : ""}><span class="${this._loading ? "spin" : ""}">↻</span></button>
+          <section class="panel-card">
+            <div class="card-head"><div><strong>Statystyki</strong><span>Ostatnie 30 dni</span></div></div>
+            <div class="stats-list">
+              <div class="stat-row"><div class="stat-left"><i>▥</i>Średnie dzienne zużycie</div><strong>${Number.isFinite(dailyAverage)?this._fmt(dailyAverage,2):"—"} kWh</strong></div>
+              <div class="stat-row"><div class="stat-left"><i>↗</i>Najwyższe zużycie</div><strong>${Number.isFinite(max30)?this._fmt(max30,1):"—"} kWh</strong></div>
+              <div class="stat-row"><div class="stat-left"><i>↘</i>Najniższe zużycie</div><strong>${Number.isFinite(min30)?this._fmt(min30,1):"—"} kWh</strong></div>
+              <div class="stat-row"><div class="stat-left"><i>Σ</i>Łączne zużycie</div><strong>${Number.isFinite(total30)?this._fmt(total30,1):"—"} kWh</strong></div>
+            </div>
+          </section>
+
+          <section class="panel-card">
+            <div class="card-head"><div><strong>Informacje o liczniku</strong><span>eLicznik</span></div></div>
+            <div class="info-grid">
+              <div class="info"><div class="info-label">Model</div><div class="info-value">MA309M</div></div>
+              <div class="info"><div class="info-label">Numer licznika</div><div class="info-value">${this._escape(String(meterNumber))}</div></div>
+              <div class="info"><div class="info-label">Taryfa</div><div class="info-value">${this._escape(String(tariff))}</div></div>
+              <div class="info"><div class="info-label">Ostatni odczyt</div><div class="info-value">${this._date(lastReading)}</div></div>
+              <div class="info full"><div class="info-label">Status</div><div class="info-value"><span class="status-live-dot"></span>Połączony (HAN)</div></div>
+            </div>
+            <button class="refresh-wide" data-refresh title="Odśwież dane Tauron" aria-label="Odśwież dane Tauron" ${this._loading?"disabled":""}>↻&nbsp; Odśwież dane z eLicznik</button>
+          </section>
         </div>
-      </header>
 
-      ${this._energyFlowSvg(dailyConsumed)}
-
-      <section class="kpi-grid" aria-label="Podsumowanie energii">
-        <article class="kpi">
-          <div class="kpi-top"><div class="kpi-icon">♧</div><span class="kpi-label">Pobór dzisiaj</span></div>
-          <div class="kpi-value">${Number.isFinite(dailyConsumed) ? this._fmt(dailyConsumed,2) : "—"} <small>kWh</small></div>
-          <div class="kpi-sub">${selectedLabel}<strong>${status === "W porządku" ? "↓ w normie" : "Brak danych"}</strong></div>
-          <div class="kpi-bar"><i style="width:${budgetPercent}%"></i></div>
-        </article>
-
-        <article class="kpi">
-          <div class="kpi-top"><div class="kpi-icon">⚡</div><span class="kpi-label">Moc chwilowa</span></div>
-          <div class="kpi-value">${Number.isFinite(power) ? this._fmt(power,0) : "—"} <small>W</small></div>
-          <div class="kpi-sub">${Number.isFinite(power) ? "Odczyt chwilowy z HAN" : "Brak encji mocy chwilowej"}</div>
-          <div class="mini-trend">
-            <svg viewBox="0 0 220 40" preserveAspectRatio="none" aria-hidden="true">
-              <polyline class="mini-line" points="0,30 16,24 31,28 47,18 63,23 79,14 95,20 111,9 127,18 143,12 159,20 175,10 191,16 207,6 220,10"/>
-            </svg>
-          </div>
-        </article>
-
-        <article class="kpi orange">
-          <div class="kpi-top"><div class="kpi-icon">◉</div><span class="kpi-label">Koszt dzisiaj</span></div>
-          <div class="kpi-value">${fmtCost(cost)}</div>
-          <div class="kpi-sub">Taryfa <strong style="color:#ffc45c">${this._escape(String(tariff))}</strong></div>
-          <div class="cost-note">${Number.isFinite(cost) ? "Koszt z encji Home Assistant" : "Brak skonfigurowanej encji kosztu"}</div>
-        </article>
-
-        <article class="kpi green">
-          <div class="kpi-top"><div class="kpi-icon">⌁</div><span class="kpi-label">Ślad węglowy</span></div>
-          <div class="kpi-value">${fmtCarbon(carbon)}</div>
-          <div class="kpi-sub">na podstawie danych energetycznych</div>
-          <div class="carbon-note">${Number.isFinite(carbon) ? "Wartość z encji Home Assistant" : "Brak skonfigurowanej encji CO₂"}</div>
-        </article>
+        <footer class="footer">
+          <span>Źródło: /odczyty/api · /energia/api · PSE Energetyczny Kompas</span>
+          <span>Wybrany dzień: ${selectedDate} · Auto ${this._autoRefreshMinutes} min · Aktualizacja ${updated?this._date(updated):"—"}</span>
+        </footer>
       </section>
-
-      <div class="main-grid">
-        <section class="panel-card">
-          <div class="card-head">
-            <div><strong>Strefy taryfowe — ${this._escape(String(tariff))}</strong><span>Stan licznika i zużycie dzisiaj</span></div>
-            <div class="pill">${this._escape(String(tariff))}</div>
-          </div>
-          <div class="zone-grid">
-            <article class="zone z1">
-              <span class="badge">T1 ☾</span><small>Strefa T1</small>
-              <b>${Number.isFinite(t1) ? this._fmt(t1,0) : "—"} <i>kWh</i></b>
-              <div class="zone-footer"><span>Dzisiaj</span><strong>${Number.isFinite(t1Daily) ? this._fmt(t1Daily,1) : "—"} kWh</strong></div>
-            </article>
-            <article class="zone z2">
-              <span class="badge">T2 ☀</span><small>Strefa T2</small>
-              <b>${Number.isFinite(t2) ? this._fmt(t2,0) : "—"} <i>kWh</i></b>
-              <div class="zone-footer"><span>Dzisiaj</span><strong>${Number.isFinite(t2Daily) ? this._fmt(t2Daily,1) : "—"} kWh</strong></div>
-            </article>
-            <article class="zone z3">
-              <span class="badge">T3 ◐</span><small>Strefa T3</small>
-              <b>${Number.isFinite(t3) ? this._fmt(t3,0) : "—"} <i>kWh</i></b>
-              <div class="zone-footer"><span>Dzisiaj</span><strong>${Number.isFinite(t3Daily) ? this._fmt(t3Daily,1) : "—"} kWh</strong></div>
-            </article>
-          </div>
-        </section>
-
-        <section class="panel-card">
-          <div class="card-head">
-            <div><strong>Zużycie energii</strong><span>${selectedLabel} · ostatnie ${Number(c.days_history || 14)} dni</span></div>
-            <div class="pill">${Number.isFinite(dailyConsumed) ? this._fmt(dailyConsumed,1) : "—"} kWh</div>
-          </div>
-          <div style="display:flex;justify-content:flex-end;gap:5px;margin:-5px 0 6px">
-            <button class="refresh" data-energy-today title="Pokaż dzisiaj" aria-label="Pokaż dzisiaj">⌂</button>
-            <button class="refresh" data-energy-date="-1" title="Poprzedni dzień" aria-label="Poprzedni dzień">‹</button>
-            <button class="refresh" data-energy-date="1" title="Następny dzień" aria-label="Następny dzień" ${this._dateKey(new Date()) === selectedDate ? "disabled" : ""}>›</button>
-          </div>
-          ${this._chartSvg()}
-          <div class="legend"><span><i class="c"></i>Pobór (kWh)</span><span><i class="e"></i>Oddanie (kWh)</span></div>
-        </section>
-      </div>
-
-
-      <section class="panel-card context">
-        <div class="card-head">
-          <div><strong>Energetyczny Kompas</strong><span>Prognoza na podstawie historii zużycia i taryfy ${this._escape(String(tariff))}</span></div>
-          <div class="pill">Taryfa ${this._escape(String(tariff))}</div>
-        </div>
-        <div class="pse-grid">
-          ${this._pseCard("Dzisiaj", "Energetyczne godziny szczytu", c.pse_today_entity)}
-          ${this._pseCard("Jutro · D+1", "Planowane energetyczne godziny szczytu", c.pse_tomorrow_entity)}
-        </div>
-        <div class="pse-legend">
-          <span><i class="legend-darkgreen"></i>Zalecane użytkowanie</span>
-          <span><i class="legend-green"></i>Normalne użytkowanie</span>
-          <span><i class="legend-yellow"></i>Zalecane oszczędzanie</span>
-          <span><i class="legend-red"></i>Wymagane ograniczenie</span>
-        </div>
-      </section>
-
-      <div class="bottom-grid">
-        <section class="panel-card">
-          <div class="card-head"><div><strong>Statystyki</strong><span>Na podstawie historii zużycia</span></div></div>
-          <div class="stats-list">
-            <div class="stat-row"><div class="stat-left"><i>▥</i>Średnie dzienne zużycie</div><strong>${Number.isFinite(dailyAverage) ? this._fmt(dailyAverage,2) + " kWh" : "—"}</strong></div>
-            <div class="stat-row"><div class="stat-left"><i>↗</i>Najwyższe zużycie (30 dni)</div><strong>${Number.isFinite(maxDaily30) ? this._fmt(maxDaily30,1) + " kWh" : "—"}</strong></div>
-            <div class="stat-row"><div class="stat-left"><i>↘</i>Najniższe zużycie (30 dni)</div><strong>${Number.isFinite(minDaily30) ? this._fmt(minDaily30,1) + " kWh" : "—"}</strong></div>
-            <div class="stat-row"><div class="stat-left"><i>Σ</i>Łączne zużycie (30 dni)</div><strong>${Number.isFinite(total30) ? this._fmt(total30,1) + " kWh" : "—"}</strong></div>
-          </div>
-        </section>
-
-        <section class="panel-card">
-          <div class="card-head"><div><strong>Informacje o liczniku</strong><span>eLicznik</span></div></div>
-          <div class="info-grid">
-            <div class="info"><div class="info-label">Model</div><div class="info-value">MA309M</div></div>
-            <div class="info"><div class="info-label">Numer licznika</div><div class="info-value">${this._escape(this._state(c.meter_number_entity)?.state || "—")}</div></div>
-            <div class="info"><div class="info-label">Taryfa</div><div class="info-value">${this._escape(String(tariff))}</div></div>
-            <div class="info"><div class="info-label">Ostatni odczyt</div><div class="info-value">${this._date(lastReading)}</div></div>
-            <div class="info full"><div class="info-label">Status</div><div class="info-value"><span class="status-live-dot"></span> Połączony (eLicznik)</div></div>
-          </div>
-          <button class="refresh-wide" title="Odśwież dane Tauron" aria-label="Odśwież dane Tauron" ${this._loading ? "disabled" : ""}>↻ &nbsp; Odśwież dane z eLicznik</button>
-        </section>
-      </div>
-
-
-      <footer class="footer">
-        <span>Źródło dzisiaj: /odczyty/api · historia: /energia/api · PSE: Energetyczny Kompas</span>
-        <span>Wybrany dzień: ${selectedDate} · Auto ${this._autoRefreshMinutes} min</span>
-      </footer>
-    </section>
-  `;
-
-  this.shadowRoot.querySelectorAll("[data-energy-date]").forEach(button => {
-    button.addEventListener("click", () => this._changeDate(Number(button.dataset.energyDate)));
-  });
-  const todayButton = this.shadowRoot.querySelector("[data-energy-today]");
-  if (todayButton) todayButton.addEventListener("click", () => this._goToday());
-
-  this.shadowRoot.querySelectorAll(".refresh, .refresh-wide").forEach(button => {
-    if (button.dataset.energyDate !== undefined || button.dataset.energyToday !== undefined) return;
-    button.addEventListener("click", () => this._refresh());
-  });
-
-  const chart = this.shadowRoot.querySelector(".chart-wrap");
-  const tooltip = this.shadowRoot.querySelector(".chart-tooltip");
-  if (chart && tooltip) {
-    chart.querySelectorAll(".chart-point").forEach(point => {
-      point.addEventListener("mouseenter", () => {
-        tooltip.hidden = false;
-        tooltip.innerHTML = `<strong>${point.dataset.kind}</strong><span>${point.dataset.label}</span><b>${this._fmt(Number(point.dataset.value), 2)} kWh</b>`;
-      });
-      point.addEventListener("mousemove", event => {
-        const rect = chart.getBoundingClientRect();
-        const x = event.clientX - rect.left;
-        const y = event.clientY - rect.top;
-        tooltip.style.left = `${Math.max(8, Math.min(x + 12, rect.width - 150))}px`;
-        tooltip.style.top = `${Math.max(8, y - 70)}px`;
-      });
-      point.addEventListener("mouseleave", () => { tooltip.hidden = true; });
-    });
+    \`;
   }
-}
 }
 
 customElements.define("tauron-energy-card", TauronEnergyCard);
