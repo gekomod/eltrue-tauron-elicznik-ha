@@ -4,70 +4,55 @@
     const values=Array.isArray(entry?.values)?entry.values.map(Number):[];
     const valid=values.filter(Number.isFinite);
     if(!valid.length){
-      return `
-        <div class="chart-empty"><strong>Brak profilu godzinowego</strong><span>Oczekiwanie na dane godzinowe z /energia/api.</span></div>
-      `;
+      return '<div class="chart-empty"><strong>Brak profilu godzinowego</strong><span>Oczekiwanie na dane godzinowe z /energia/api.</span></div>';
     }
-
-    const W=900,H=255,left=48,right=16,top=42,bottom=34;
+    const W=900,H=255,left=48,right=16,top=38,bottom=34;
     const plotW=W-left-right,plotH=H-top-bottom;
-    const max=Math.max(1,...valid)*1.16;
+    const max=Math.max(1,...valid)*1.18;
     const slot=plotW/values.length;
     const barW=Math.max(8,slot-5);
-
     const zoneForHour=hour=>{
       if(hour>=6&&hour<13)return{cls:"bar-t1",name:"T1"};
       if(hour>=13&&hour<15)return{cls:"bar-t2",name:"T2"};
       return{cls:"bar-t3",name:"T3"};
     };
-
     const bars=values.map((value,i)=>{
-      if(!Number.isFinite(value))return"";
+      if(!Number.isFinite(value))return "";
       const x=left+i*slot+(slot-barW)/2;
       const h=Math.max(2,(value/max)*plotH);
       const y=top+plotH-h;
       const zone=zoneForHour(i);
-      return `<g class="hourbar" tabindex="0" data-kind="Pobór" data-label="{{String(i).padStart(2,"0")}}:00" data-value="{{value}}">
-        <rect class="{{zone.cls}}" x="{{x.toFixed(1)}}" y="{{y.toFixed(1)}}" width="{{barW.toFixed(1)}}" height="{{h.toFixed(1)}}" rx="4"/>
-        <title>{{String(i).padStart(2,"0")}}:00 · {{zone.name}} · {{this._fmt(value,2)}} kWh</title>
-      </g>`;
+      return '<g class="hourbar" tabindex="0" data-kind="Pobór" data-label="' + String(i).padStart(2,"0") + ':00" data-value="' + value + '">' +
+        '<rect class="' + zone.cls + '" x="' + x.toFixed(1) + '" y="' + y.toFixed(1) + '" width="' + barW.toFixed(1) + '" height="' + h.toFixed(1) + '" rx="4"/>' +
+        '<title>' + String(i).padStart(2,"0") + ':00 · ' + zone.name + ' · ' + this._fmt(value,2) + ' kWh</title></g>';
     }).join("");
-
     const grid=[0,.25,.5,.75,1].map(r=>{
       const y=top+plotH-r*plotH;
-      return `<line class="chart-grid" x1="{{left}}" y1="{{y}}" x2="{{W-right}}" y2="{{y}}"/>
-        <text class="chart-axis-y" x="{{left-8}}" y="{{y+4}}" text-anchor="end">{{this._fmt(max*r,1)}}</text>`;
+      return '<line class="chart-grid" x1="' + left + '" y1="' + y + '" x2="' + (W-right) + '" y2="' + y + '"/>' +
+        '<text class="chart-axis-y" x="' + (left-8) + '" y="' + (y+4) + '" text-anchor="end">' + this._fmt(max*r,1) + '</text>';
     }).join("");
-
     const labels=values.map((_,i)=>{
-      if(values.length>12&&i%2!==0)return"";
+      if(values.length>12&&i%2!==0)return "";
       const x=left+i*slot+slot/2;
-      return `<text class="chart-axis-x" x="{{x.toFixed(1)}}" y="{{H-10}}" text-anchor="middle">{{String(i).padStart(2,"0")}}</text>`;
+      return '<text class="chart-axis-x" x="' + x.toFixed(1) + '" y="' + (H-10) + '" text-anchor="middle">' + String(i).padStart(2,"0") + '</text>';
     }).join("");
-
+    const total=Number.isFinite(entry?.value)?entry.value:NaN;
     const idx=history.findIndex(x=>x.date===entry?.date);
     const previous=idx>0?Number(history[idx-1]?.value):NaN;
-    const delta=Number.isFinite(entry?.value)&&Number.isFinite(previous)&&previous>0
-      ?((entry.value-previous)/previous)*100:NaN;
-
-    return `
-      <div class="chart-inner">
-        <div class="chart-summary">
-          <div><strong>{{Number.isFinite(entry?.value)?this._fmt(entry.value,1):"—"}} kWh</strong>
-          <span>{{this._dateLabel(entry?.date||this._selectedDate)}}</span>
-          {{Number.isFinite(delta)?`<em class="{{delta<=0?"down":"up"}}">{{delta<=0?"↓":"↑"}} {{this._fmt(Math.abs(delta),0)}}%</em>`:""}}</div>
-          <div class="chart-tabs" role="tablist" aria-label="Zakres">
-            <button class="chart-tab active" type="button">Dzień</button>
-            <button class="chart-tab" type="button">Tydzień</button>
-            <button class="chart-tab" type="button">Miesiąc</button>
-          </div>
-        </div>
-        <svg viewBox="0 0 {{W}} {{H}}" preserveAspectRatio="none" role="img" aria-label="Godzinowe zużycie energii">
-          {{grid}}{{bars}}{{labels}}
-        </svg>
-        <div class="chart-legend"><span><i class="legend-blue"></i>T1</span><span><i class="legend-orange"></i>T2</span><span><i class="legend-purple"></i>T3</span></div>
-      </div>
-    `.replaceAll("{{",").replaceAll(}","}");
+    const delta=Number.isFinite(total)&&Number.isFinite(previous)&&previous>0?((total-previous)/previous)*100:NaN;
+    const summary="<strong>"+(Number.isFinite(total)?this._fmt(total,1):"—")+" kWh</strong>" +
+      "<span>"+this._dateLabel(entry?.date||this._selectedDate)+"</span>" +
+      (Number.isFinite(delta) ? "<em class=\""+(delta<=0?"down":"up")+"\">"+(delta<=0?"↓":"↑")+" "+this._fmt(Math.abs(delta),0)+"%</em>" : "");
+    return '<div class="chart-inner">' +
+      '<div class="chart-summary"><div>' + summary + '</div>' +
+      '<div class="chart-tabs" role="tablist" aria-label="Zakres">' +
+      '<button class="chart-tab active" type="button" aria-selected="true">Dzień</button>' +
+      '<button class="chart-tab" type="button" aria-selected="false">Tydzień</button>' +
+      '<button class="chart-tab" type="button" aria-selected="false">Miesiąc</button></div></div>' +
+      '<svg viewBox="0 0 ' + W + ' ' + H + '" preserveAspectRatio="none" role="img" aria-label="Godzinowe zużycie energii">' +
+      grid + bars + labels + '</svg>' +
+      '<div class="chart-legend"><span><i class="legend-blue"></i>T1</span><span><i class="legend-orange"></i>T2</span><span><i class="legend-purple"></i>T3</span></div>' +
+      '<div class="chart-tooltip" hidden></div></div>';
   }
   async _refresh() {
     const entity = this._config.refresh_entity;
