@@ -1,59 +1,614 @@
-  _chartSvg() {
-    const history=this._chartHistorySeries()||[];
-    const entry=this._selectedHistoryEntry();
-    const values=Array.isArray(entry?.values)?entry.values.map(Number):[];
-    const valid=values.filter(Number.isFinite);
-    if(!valid.length){
-      return '<div class="chart-empty"><strong>Brak profilu godzinowego</strong><span>Oczekiwanie na dane godzinowe z /energia/api.</span></div>';
-    }
-    const W=900,H=255,left=48,right=16,top=38,bottom=34;
-    const plotW=W-left-right,plotH=H-top-bottom;
-    const max=Math.max(1,...valid)*1.18;
-    const slot=plotW/values.length;
-    const barW=Math.max(8,slot-5);
-    const zoneForHour=hour=>{
-      if(hour>=6&&hour<13)return{cls:"bar-t1",name:"T1"};
-      if(hour>=13&&hour<15)return{cls:"bar-t2",name:"T2"};
-      return{cls:"bar-t3",name:"T3"};
+// Tauron eLicznik card — Chart API history + current-day meter reading
+class TauronEnergyCard extends HTMLElement {
+  static getStubConfig() {
+    return {
+      consumed_entity: "sensor.serwerownia_tauron_elicznik_energia_pobrana",
+      exported_entity: "sensor.serwerownia_tauron_elicznik_energia_oddana",
+      daily_consumed_entity: "sensor.serwerownia_tauron_elicznik_dzienne_zuzycie_energii_chart_api",
+      daily_exported_entity: "sensor.serwerownia_tauron_elicznik_dzienne_oddanie_energii_chart_api",
+      daily_average_entity: "sensor.serwerownia_tauron_elicznik_srednie_zuzycie_dzienne",
+      balance_entity: "sensor.serwerownia_tauron_elicznik_bilans_energii",
+      daily_budget_entity: "sensor.serwerownia_tauron_elicznik_dzienny_budzet_energii",
+      monthly_budget_entity: "sensor.serwerownia_tauron_elicznik_miesieczny_budzet_energii",
+      days_entity: "sensor.serwerownia_tauron_elicznik_dni_do_rozliczenia",
+      billing_start_consumed_entity: "sensor.serwerownia_tauron_elicznik_energia_pobrana_na_poczatku_okresu",
+      billing_start_exported_entity: "sensor.serwerownia_tauron_elicznik_energia_oddana_na_poczatku_okresu",
+      last_reading_entity: "sensor.serwerownia_tauron_elicznik_data_ostatniego_odczytu",
+      last_fetch_entity: "sensor.serwerownia_tauron_elicznik_ostatnie_pobranie_danych",
+      refresh_entity: "button.tauron_elicznik_odswiez_dane",
+      tariff_entity: "sensor.serwerownia_tauron_elicznik_taryfa",
+      t1_entity: "sensor.serwerownia_tauron_elicznik_t1_licznik",
+      t2_entity: "sensor.serwerownia_tauron_elicznik_t2_licznik",
+      t3_entity: "sensor.serwerownia_tauron_elicznik_t3_licznik",
+      t1_daily_entity: "sensor.serwerownia_tauron_elicznik_t1_dzisiaj",
+      t2_daily_entity: "sensor.serwerownia_tauron_elicznik_t2_dzisiaj",
+      t3_daily_entity: "sensor.serwerownia_tauron_elicznik_t3_dzisiaj",
+      pse_today_entity: "sensor.serwerownia_tauron_elicznik_energetyczny_kompas_dzisiaj",
+      pse_tomorrow_entity: "sensor.serwerownia_tauron_elicznik_energetyczny_kompas_jutro",
+      title: "Energia",
+      days_history: 14,
+      auto_refresh_minutes: 60
     };
-    const bars=values.map((value,i)=>{
-      if(!Number.isFinite(value))return "";
-      const x=left+i*slot+(slot-barW)/2;
-      const h=Math.max(2,(value/max)*plotH);
-      const y=top+plotH-h;
-      const zone=zoneForHour(i);
-      return '<g class="hourbar" tabindex="0" data-kind="Pobór" data-label="' + String(i).padStart(2,"0") + ':00" data-value="' + value + '">' +
-        '<rect class="' + zone.cls + '" x="' + x.toFixed(1) + '" y="' + y.toFixed(1) + '" width="' + barW.toFixed(1) + '" height="' + h.toFixed(1) + '" rx="4"/>' +
-        '<title>' + String(i).padStart(2,"0") + ':00 · ' + zone.name + ' · ' + this._fmt(value,2) + ' kWh</title></g>';
-    }).join("");
-    const grid=[0,.25,.5,.75,1].map(r=>{
-      const y=top+plotH-r*plotH;
-      return '<line class="chart-grid" x1="' + left + '" y1="' + y + '" x2="' + (W-right) + '" y2="' + y + '"/>' +
-        '<text class="chart-axis-y" x="' + (left-8) + '" y="' + (y+4) + '" text-anchor="end">' + this._fmt(max*r,1) + '</text>';
-    }).join("");
-    const labels=values.map((_,i)=>{
-      if(values.length>12&&i%2!==0)return "";
-      const x=left+i*slot+slot/2;
-      return '<text class="chart-axis-x" x="' + x.toFixed(1) + '" y="' + (H-10) + '" text-anchor="middle">' + String(i).padStart(2,"0") + '</text>';
-    }).join("");
-    const total=Number.isFinite(entry?.value)?entry.value:NaN;
-    const idx=history.findIndex(x=>x.date===entry?.date);
-    const previous=idx>0?Number(history[idx-1]?.value):NaN;
-    const delta=Number.isFinite(total)&&Number.isFinite(previous)&&previous>0?((total-previous)/previous)*100:NaN;
-    const summary="<strong>"+(Number.isFinite(total)?this._fmt(total,1):"—")+" kWh</strong>" +
-      "<span>"+this._dateLabel(entry?.date||this._selectedDate)+"</span>" +
-      (Number.isFinite(delta) ? "<em class=\""+(delta<=0?"down":"up")+"\">"+(delta<=0?"↓":"↑")+" "+this._fmt(Math.abs(delta),0)+"%</em>" : "");
-    return '<div class="chart-inner">' +
-      '<div class="chart-summary"><div>' + summary + '</div>' +
-      '<div class="chart-tabs" role="tablist" aria-label="Zakres">' +
-      '<button class="chart-tab active" type="button" aria-selected="true">Dzień</button>' +
-      '<button class="chart-tab" type="button" aria-selected="false">Tydzień</button>' +
-      '<button class="chart-tab" type="button" aria-selected="false">Miesiąc</button></div></div>' +
-      '<svg viewBox="0 0 ' + W + ' ' + H + '" preserveAspectRatio="none" role="img" aria-label="Godzinowe zużycie energii">' +
-      grid + bars + labels + '</svg>' +
-      '<div class="chart-legend"><span><i class="legend-blue"></i>T1</span><span><i class="legend-orange"></i>T2</span><span><i class="legend-purple"></i>T3</span></div>' +
-      '<div class="chart-tooltip" hidden></div></div>';
   }
+
+  constructor() {
+    super();
+    this.attachShadow({ mode: "open" });
+    this._config = {};
+    this._hass = null;
+    this._history = [];
+    this._loading = false;
+    this._timer = null;
+    this._autoRefreshTimer = null;
+    this._selectedDate = null;
+    this._autoRefreshMinutes = 60;
+  }
+
+  setConfig(config) {
+    this._config = { ...TauronEnergyCard.getStubConfig(), ...config };
+    this._autoRefreshMinutes = [60, 120].includes(Number(this._config.auto_refresh_minutes))
+      ? Number(this._config.auto_refresh_minutes)
+      : 60;
+    this._render();
+    this._startAutoRefresh();
+  }
+
+  set hass(hass) {
+    this._hass = hass;
+    this._render();
+    this._scheduleHistoryRefresh();
+  }
+
+  connectedCallback() {
+    this._scheduleHistoryRefresh();
+  }
+
+  disconnectedCallback() {
+    if (this._timer) clearTimeout(this._timer);
+    if (this._autoRefreshTimer) clearInterval(this._autoRefreshTimer);
+  }
+
+
+  _dateKey(date) {
+    const d = date instanceof Date ? date : new Date(date);
+    return [
+      d.getFullYear(),
+      String(d.getMonth() + 1).padStart(2, "0"),
+      String(d.getDate()).padStart(2, "0")
+    ].join("-");
+  }
+
+  _historyDateKeys() {
+    const history = this._chartHistorySeries();
+    return history ? history.map(entry => entry.date).filter(Boolean).sort() : [];
+  }
+
+  _selectedHistoryEntry() {
+    const history = this._chartHistorySeries();
+    if (!history?.length) return null;
+
+    if (!this._selectedDate) {
+      const today = this._dateKey(new Date());
+      this._selectedDate = history.some(entry => entry.date === today)
+        ? today
+        : history[history.length - 1].date;
+    }
+
+    return history.find(entry => entry.date === this._selectedDate)
+      || history[history.length - 1]
+      || null;
+  }
+
+  _dateLabel(dateKey) {
+    if (!dateKey) return "Brak daty";
+    const today = new Date();
+    const yesterday = new Date(today);
+    yesterday.setDate(today.getDate() - 1);
+
+    if (dateKey === this._dateKey(today)) return "Dzisiaj";
+    if (dateKey === this._dateKey(yesterday)) return "Wczoraj";
+
+    const parts = dateKey.split("-").map(Number);
+    return new Date(parts[0], parts[1] - 1, parts[2]).toLocaleDateString("pl-PL", {
+      weekday: "short",
+      day: "2-digit",
+      month: "2-digit",
+      year: "numeric"
+    });
+  }
+
+  _changeDate(offset) {
+    const keys = this._historyDateKeys();
+    if (!keys.length) return;
+
+    const current = keys.indexOf(this._selectedDate);
+    const next = (current < 0 ? keys.length - 1 : current) + offset;
+
+    if (next < 0 || next >= keys.length) return;
+
+    this._selectedDate = keys[next];
+    this._render();
+  }
+
+  _goToday() {
+    const today = this._dateKey(new Date());
+    const keys = this._historyDateKeys();
+    this._selectedDate = keys.includes(today) ? today : (keys[keys.length - 1] || today);
+    this._render();
+  }
+
+  _setAutoRefreshMinutes(value) {
+    this._autoRefreshMinutes = Number(value) === 120 ? 120 : 60;
+    this._config.auto_refresh_minutes = this._autoRefreshMinutes;
+    this._startAutoRefresh();
+    this._render();
+  }
+
+  _startAutoRefresh() {
+    if (this._autoRefreshTimer) clearInterval(this._autoRefreshTimer);
+
+    this._autoRefreshTimer = setInterval(async () => {
+      if (this._loading || !this._hass) return;
+
+      try {
+        if (this._config.refresh_entity) {
+          await this._hass.callService("button", "press", {
+            entity_id: this._config.refresh_entity
+          });
+        }
+
+        await new Promise(resolve => setTimeout(resolve, 1500));
+        await this._loadHistory();
+      } catch (err) {
+        console.warn("Tauron Energy Card: automatic refresh failed", err);
+      }
+    }, this._autoRefreshMinutes * 60 * 1000);
+  }
+
+  _scheduleHistoryRefresh() {
+    if (this._timer) clearTimeout(this._timer);
+    this._timer = setTimeout(() => this._loadHistory(), 250);
+  }
+
+  _state(entity) {
+    if (!entity || !this._hass?.states) return undefined;
+    if (this._hass.states[entity]) return this._hass.states[entity];
+
+    // Backward compatibility with the temporary entity ids used before
+    // Home Assistant generated ids from the translated names.
+    const aliases = {
+      "sensor.serwerownia_tauron_elicznik_pse_today":
+        "sensor.serwerownia_tauron_elicznik_energetyczny_kompas_dzisiaj",
+      "sensor.serwerownia_tauron_elicznik_pse_tomorrow":
+        "sensor.serwerownia_tauron_elicznik_energetyczny_kompas_jutro",
+    };
+    const resolved = aliases[entity];
+    return resolved ? this._hass.states[resolved] : undefined;
+  }
+
+  _num(entity, fallback = 0) {
+    const n = Number(this._state(entity)?.state);
+    return Number.isFinite(n) ? n : fallback;
+  }
+
+  _fmt(value, decimals = 2) {
+    if (!Number.isFinite(value)) return "—";
+    return new Intl.NumberFormat("pl-PL", {
+      minimumFractionDigits: decimals,
+      maximumFractionDigits: decimals
+    }).format(value);
+  }
+
+  _escape(value) {
+    return String(value ?? "")
+      .replaceAll("&", "&amp;")
+      .replaceAll("<", "&lt;")
+      .replaceAll(">", "&gt;")
+      .replaceAll('"', "&quot;");
+  }
+
+  _date(value) {
+    if (!value) return "—";
+    const d = new Date(value);
+    if (Number.isNaN(d.getTime())) return "—";
+    return new Intl.DateTimeFormat("pl-PL", {
+      day: "2-digit",
+      month: "2-digit",
+      year: "numeric",
+      hour: "2-digit",
+      minute: "2-digit"
+    }).format(d);
+  }
+
+  _relative(value) {
+    if (!value) return "";
+    const d = new Date(value);
+    if (Number.isNaN(d.getTime())) return "";
+    const minutes = Math.max(0, Math.round((Date.now() - d.getTime()) / 60000));
+    if (minutes < 1) return "przed chwilą";
+    if (minutes < 60) return `${minutes} min temu`;
+    const hours = Math.round(minutes / 60);
+    if (hours < 24) return `${hours} godz. temu`;
+    return `${Math.round(hours / 24)} dni temu`;
+  }
+
+  _historyPoints(entityId) {
+    return (this._history || [])
+      .flatMap(group => Array.isArray(group) ? group : (group.states || []))
+      .filter(x => x.entity_id === entityId)
+      .map(x => ({
+        t: new Date(x.last_changed || x.last_updated).getTime(),
+        v: Number(x.state)
+      }))
+      .filter(x => Number.isFinite(x.t) && Number.isFinite(x.v))
+      .sort((a, b) => a.t - b.t);
+  }
+
+  async _loadHistory() {
+    if (!this._hass || !this._config.consumed_entity) return;
+
+    const end = new Date();
+    const start = new Date(
+      end.getTime() - Number(this._config.days_history || 14) * 86400000
+    );
+
+    try {
+      const result = await this._hass.callWS({
+        type: "history/history_during_period",
+        start_time: start.toISOString(),
+        end_time: end.toISOString(),
+        entity_ids: [
+          this._config.consumed_entity,
+          this._config.exported_entity
+        ],
+        minimal_response: false,
+        no_attributes: true,
+        significant_changes_only: false
+      });
+
+      this._history = Object.entries(result || {}).flatMap(
+        ([entity_id, states]) =>
+          (Array.isArray(states) ? states : []).map(state => ({
+            entity_id,
+            ...state
+          }))
+      );
+
+      this._render();
+    } catch (err) {
+      console.warn("Tauron Energy Card: history unavailable", err);
+      this._history = [];
+      this._render();
+    }
+  }
+
+  _dailySeries(entityId) {
+    const source = this._historyPoints(entityId);
+    const days = [];
+    const now = new Date();
+
+    for (let i = Number(this._config.days_history || 14) - 1; i >= 0; i--) {
+      const d = new Date(now.getFullYear(), now.getMonth(), now.getDate() - i);
+      const next = new Date(d.getFullYear(), d.getMonth(), d.getDate() + 1);
+
+      const beforeStart = source.filter(p => p.t < d.getTime()).pop();
+      const beforeEnd = source.filter(p => p.t < next.getTime()).pop();
+
+      let delta = 0;
+      if (beforeStart && beforeEnd) {
+        delta = beforeEnd.v - beforeStart.v;
+      } else if (beforeEnd) {
+        const first = source.find(p => p.t >= d.getTime() && p.t < next.getTime());
+        delta = first ? beforeEnd.v - first.v : 0;
+      }
+
+      if (delta < 0 || !Number.isFinite(delta)) delta = 0;
+
+      days.push({
+        label: new Intl.DateTimeFormat("pl-PL", {
+          day: "2-digit",
+          month: "2-digit"
+        }).format(d),
+        value: delta,
+        date: d.toISOString().slice(0, 10)
+      });
+    }
+
+    return days;
+  }
+
+  _chartHistorySeries() {
+    const state = this._state(this._config.daily_consumed_entity);
+    const history = state?.attributes?.chart_history;
+    if (!Array.isArray(history) || !history.length) return null;
+
+    return history
+      .filter(day => day && day.date)
+      .map(day => ({
+        label: new Intl.DateTimeFormat("pl-PL", {
+          day: "2-digit",
+          month: "2-digit"
+        }).format(new Date(day.date + "T12:00:00")),
+        value: Number(day.total),
+        date: day.date,
+        values: Array.isArray(day.values) ? day.values : [],
+        source: day.source || "energia/api"
+      }))
+      .filter(day => Number.isFinite(day.value));
+  }
+
+  _todayHistoryValue() {
+    const entry = this._selectedHistoryEntry();
+    return entry ? entry.value : null;
+  }
+
+  _todayDailyConsumed() {
+    const historyValue = this._todayHistoryValue();
+    if (Number.isFinite(historyValue)) return historyValue;
+
+    if (this._selectedDate === this._dateKey(new Date())) {
+      const value = this._num(this._config.daily_consumed_entity, NaN);
+      return Number.isFinite(value) ? value : NaN;
+    }
+
+    return NaN;
+  }
+
+
+  _pseStatusClass(value) {
+    const text = String(value || "").toLowerCase();
+    if (text.includes("wymagane")) return "pse-red";
+    if (text.includes("oszczędzanie")) return "pse-yellow";
+    if (text.includes("normalne")) return "pse-green";
+    if (text.includes("zalecane użytkowanie")) return "pse-darkgreen";
+    return "pse-neutral";
+  }
+
+  _pseTimeline(entityId) {
+    const hours = this._state(entityId)?.attributes?.hours;
+    if (!Array.isArray(hours)) return "";
+    return hours.map(item => {
+      const time = String(item.dtime || "").slice(11, 16);
+      const status = String(item.state || "Nieznany status");
+      return `<div class="pse-hour ${this._pseStatusClass(status)}" title="${this._escape(status)}"><span>${time}</span><i></i></div>`;
+    }).join("");
+  }
+
+  _pseCard(title, subtitle, entityId) {
+    const state = this._state(entityId);
+    const status = state?.state && !["unknown","unavailable"].includes(state.state)
+      ? state.state
+      : "Brak opublikowanych danych";
+    const timeline = this._pseTimeline(entityId);
+    return `<div class="pse-card">
+      <div class="pse-card-head">
+        <div><strong>${title}</strong><span>${subtitle}</span></div>
+        <b class="${this._pseStatusClass(status)}">${this._escape(status)}</b>
+      </div>
+      <div class="pse-timeline">${timeline || '<div class="pse-empty">PSE nie opublikowało jeszcze godzin dla tego dnia.</div>'}</div>
+    </div>`;
+  }
+
+  _hourlyProfileSvg() {
+    const history = this._chartHistorySeries();
+    if (!history?.length) return "";
+    const entry = this._selectedHistoryEntry();
+    const values = Array.isArray(entry?.values) ? entry.values.map(Number).filter(Number.isFinite) : [];
+    if (!values.length) return "";
+
+    const W = 900, H = 190, left = 42, right = 18, top = 18, bottom = 32;
+    const plotW = W - left - right, plotH = H - top - bottom;
+    const max = Math.max(1, ...values) * 1.12;
+
+    const bars = values.map((value, i) => {
+      const slot = plotW / values.length, gap = 4, width = Math.max(4, slot - gap);
+      const x = left + i * slot + gap / 2;
+      const height = Math.max(1, (value / max) * plotH);
+      const y = top + plotH - height;
+      const label = String(i).padStart(2, "0");
+      return `<rect class="hour-bar" x="${x.toFixed(1)}" y="${y.toFixed(1)}" width="${width.toFixed(1)}" height="${height.toFixed(1)}" rx="3"><title>${label}:00 — ${this._fmt(value,2)} kWh</title></rect><text class="hour-axis" x="${(x+width/2).toFixed(1)}" y="${H-8}" text-anchor="middle">${label}</text>`;
+    }).join("");
+
+    return `
+      <div class="hourly">
+        <div class="section-title"><strong>Godzinowy profil zużycia · ${this._dateLabel(entry?.date || this._selectedDate)}</strong><span>24 godziny</span></div>
+        <svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" role="img" aria-label="Godzinowy profil dzisiejszego zużycia">
+          <line class="hour-grid" x1="${left}" y1="${top+plotH}" x2="${W-right}" y2="${top+plotH}"></line>
+          ${bars}
+        </svg>
+      </div>
+    `;
+  }
+
+  _energyFlowSvg(dailyConsumed) {
+  const active = Number.isFinite(dailyConsumed) && dailyConsumed > 0;
+  const status = active ? "Przepływ aktywny" : "Brak dzisiejszego poboru";
+  const statusClass = active ? "flow-live" : "flow-idle";
+  const reducedMotion = window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches;
+  const motion = active && !reducedMotion;
+
+  const pulse = (begin) => motion ? `
+    <g class="pulse">
+      <path d="M0 0 L13 8 L0 16" />
+      <animateMotion dur="3.2s" begin="${begin}s" repeatCount="indefinite" rotate="auto"
+        path="M208 140 C275 125 352 122 430 146 S650 148 720 146 S920 145 1020 154" />
+    </g>` : "";
+
+  return `
+    <section class="scene ${statusClass}" aria-label="Przepływ energii od sieci Tauron do domu">
+      <div class="scene-topbar">
+        <div>
+          <div class="scene-kicker">PRZEPŁYW ENERGII</div>
+          <strong>Sieć → licznik → rozdzielnica → dom</strong>
+          <span>Wizualizacja kierunku zasilania</span>
+        </div>
+        <div class="scene-status"><i></i>${status}</div>
+      </div>
+
+      <svg class="scene-svg" viewBox="0 0 1200 310" role="img"
+           aria-label="Słup energetyczny, licznik MA309M, rozdzielnica główna i dom połączone animowanym przepływem energii">
+        <defs>
+          <linearGradient id="sceneSky" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stop-color="#071a32"/>
+            <stop offset="55%" stop-color="#081a2b"/>
+            <stop offset="100%" stop-color="#10261d"/>
+          </linearGradient>
+          <linearGradient id="sceneGround" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stop-color="#0f2a22"/>
+            <stop offset="100%" stop-color="#07131b"/>
+          </linearGradient>
+          <linearGradient id="powerBeam" x1="0" y1="0" x2="1" y2="0">
+            <stop offset="0%" stop-color="#4db6ff" stop-opacity=".15"/>
+            <stop offset="18%" stop-color="#4db6ff" stop-opacity=".9"/>
+            <stop offset="50%" stop-color="#b8ecff" stop-opacity="1"/>
+            <stop offset="82%" stop-color="#4db6ff" stop-opacity=".9"/>
+            <stop offset="100%" stop-color="#4db6ff" stop-opacity=".15"/>
+          </linearGradient>
+          <filter id="sceneGlow"><feGaussianBlur stdDeviation="5" result="blur"/><feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+          <filter id="deviceGlow"><feGaussianBlur stdDeviation="8" result="blur"/><feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+        </defs>
+
+        <rect width="1200" height="310" rx="18" fill="url(#sceneSky)"/>
+        <g opacity=".45" fill="#c7dcff">
+          <circle cx="108" cy="52" r="1.4"/><circle cx="167" cy="31" r="1.1"/><circle cx="258" cy="72" r="1.4"/>
+          <circle cx="334" cy="43" r="1.1"/><circle cx="454" cy="34" r="1.5"/><circle cx="548" cy="59" r="1.1"/>
+          <circle cx="635" cy="30" r="1.3"/><circle cx="764" cy="67" r="1.2"/><circle cx="896" cy="43" r="1.3"/>
+          <circle cx="1032" cy="69" r="1.5"/><circle cx="1134" cy="36" r="1.2"/>
+        </g>
+        <path d="M0 245 Q160 198 310 242 T590 236 T850 230 T1200 242 V310 H0Z" fill="url(#sceneGround)"/>
+        <path d="M0 249 Q180 216 345 250 T690 242 T930 236 T1200 249" fill="none" stroke="#173b2f" stroke-width="3"/>
+
+        <g class="scene-pole" transform="translate(88 37)">
+          <path d="M35 228 L77 26 L119 228 M47 172 H107 M41 199 H113 M32 90 H122 M40 60 H114 M77 26 V228"
+            fill="none" stroke="#91a9c1" stroke-width="4" stroke-linecap="round"/>
+          <path d="M35 228 L77 26 L119 228" fill="none" stroke="#d4e2ef" stroke-width="2"/>
+          <path d="M24 92 H130 M30 119 H124" fill="none" stroke="#5e7690" stroke-width="2"/>
+          <circle cx="77" cy="26" r="5" fill="#a6ddff" filter="url(#sceneGlow)"/>
+          <text x="77" y="258" text-anchor="middle" class="scene-label">SŁUP ENERGETYCZNY</text>
+          <text x="77" y="274" text-anchor="middle" class="scene-sub">Sieć TAURON · 11 kV / 230 V</text>
+        </g>
+
+        <g class="scene-house" transform="translate(1020 92)">
+          <path d="M0 86 L78 21 L156 86 V191 H0Z" fill="#182d42" stroke="#8ca5bc" stroke-width="3"/>
+          <path d="M-9 88 L78 13 L165 88" fill="none" stroke="#cedcea" stroke-width="4" stroke-linejoin="round"/>
+          <rect x="65" y="116" width="27" height="75" rx="2" fill="#0a1724" stroke="#7e93a9" stroke-width="2"/>
+          <rect x="16" y="107" width="30" height="28" rx="2" fill="#d6f5ff"/><rect x="110" y="107" width="30" height="28" rx="2" fill="#d6f5ff"/>
+          <rect x="20" y="111" width="8" height="20" fill="#fff6bf" opacity=".92"/><rect x="34" y="111" width="8" height="20" fill="#fff6bf" opacity=".92"/>
+          <rect x="114" y="111" width="8" height="20" fill="#fff6bf" opacity=".92"/><rect x="128" y="111" width="8" height="20" fill="#fff6bf" opacity=".92"/>
+          <path d="M124 64 V14" stroke="#8399b0" stroke-width="3"/><path d="M132 14 C141 25 141 39 132 48" fill="none" stroke="#8399b0" stroke-width="3"/>
+          <text x="78" y="218" text-anchor="middle" class="scene-label">TWÓJ DOM</text>
+          <text x="78" y="234" text-anchor="middle" class="scene-sub">Pobór energii</text>
+        </g>
+
+        <g class="scene-device scene-meter" transform="translate(430 75)">
+          <rect x="0" y="0" width="172" height="158" rx="18" fill="#ced5dc" stroke="#eff5fb" stroke-width="3"/>
+          <rect x="12" y="12" width="148" height="106" rx="11" fill="#b3bdc7" stroke="#6f8293" stroke-width="2"/>
+          <rect x="28" y="30" width="116" height="56" rx="8" fill="#ecf8fb" stroke="#778b9b" stroke-width="2"/>
+          <text x="86" y="64" text-anchor="middle" font-size="25" font-family="monospace" font-weight="800" fill="#122033">001036</text>
+          <text x="126" y="78" text-anchor="middle" font-size="8" font-family="system-ui" font-weight="800" fill="#445b72">kWh</text>
+          <circle cx="38" cy="132" r="11" fill="#69e7af"/><circle cx="38" cy="132" r="5" fill="#113022"/>
+          <circle cx="69" cy="132" r="10" fill="#91b3ca"/><rect x="118" y="126" width="28" height="13" rx="3" fill="#7f8e9b"/>
+          <text x="86" y="178" text-anchor="middle" class="scene-label">LICZNIK MA309M</text>
+          <text x="86" y="194" text-anchor="middle" class="scene-sub">Tauron eLicznik</text>
+          <rect x="-18" y="-18" width="208" height="194" rx="28" fill="none" stroke="#31a9ff" stroke-opacity=".22" stroke-width="4" filter="url(#deviceGlow)"/>
+        </g>
+
+        <g class="scene-device" transform="translate(720 75)">
+          <rect x="0" y="0" width="190" height="158" rx="18" fill="#ccd5de" stroke="#eff5fb" stroke-width="3"/>
+          <rect x="16" y="14" width="158" height="122" rx="10" fill="#edf2f6" stroke="#7b8e9e" stroke-width="2"/>
+          <g transform="translate(30 27)">
+            <rect x="0" y="0" width="128" height="70" rx="6" fill="#f8fafc" stroke="#b3bec8"/>
+            <g fill="#f6f7f9" stroke="#768593" stroke-width="1.5">
+              <rect x="8" y="8" width="15" height="54" rx="2"/><rect x="29" y="8" width="15" height="54" rx="2"/>
+              <rect x="50" y="8" width="15" height="54" rx="2"/><rect x="71" y="8" width="15" height="54" rx="2"/><rect x="92" y="8" width="15" height="54" rx="2"/>
+            </g>
+            <g stroke="#4e6172" stroke-width="2"><path d="M16 24v15"/><path d="M37 24v15"/><path d="M58 24v15"/><path d="M79 24v15"/><path d="M100 24v15"/></g>
+          </g>
+          <path d="M94 116 L106 96 L118 116 L106 136Z" fill="#ffd44e" stroke="#4f5f70" stroke-width="2"/>
+          <text x="106" y="111" text-anchor="middle" font-size="11" font-weight="900" fill="#253443">!</text>
+          <text x="95" y="178" text-anchor="middle" class="scene-label">ROZDZIELNICA GŁÓWNA</text>
+          <text x="95" y="194" text-anchor="middle" class="scene-sub">Skrzynia zabezpieczeń</text>
+        </g>
+
+        <path class="scene-wire-glow" d="M208 140 C275 125 352 122 430 146 S650 148 720 146 S920 145 1020 154"/>
+        <path class="scene-wire" d="M208 140 C275 125 352 122 430 146 S650 148 720 146 S920 145 1020 154"/>
+
+        <g class="scene-pulses">
+          ${pulse(0)}${pulse(.55)}${pulse(1.1)}${pulse(1.65)}${pulse(2.2)}${pulse(2.75)}
+        </g>
+
+        <g class="scene-caption">
+          <rect x="480" y="248" width="240" height="34" rx="17"/>
+          <circle cx="501" cy="265" r="5"/>
+          <text x="513" y="269">ANIMOWANY KIERUNEK ZASILANIA</text>
+        </g>
+      </svg>
+
+      <div class="scene-bottom">
+        <span><i class="flow-dot"></i>${active ? "Dzisiejsze zużycie wykryte" : "Brak dzisiejszego zużycia"}</span>
+        <strong>${Number.isFinite(dailyConsumed) ? `Dzisiaj · ${this._fmt(dailyConsumed,2)} kWh` : "Brak danych dziennych"}</strong>
+      </div>
+    </section>
+  `;
+}
+  _chartSvg() {
+    const chartHistory = this._chartHistorySeries();
+    const consumed = chartHistory || this._dailySeries(this._config.consumed_entity);
+    const exported = this._dailySeries(this._config.exported_entity);
+    const all = [...consumed.map(x => x.value), ...exported.map(x => x.value)];
+    const max = Math.max(1, ...all) * 1.15;
+
+    const W = 900, H = 280;
+    const left = 46, right = 18, top = 22, bottom = 42;
+    const plotW = W - left - right, plotH = H - top - bottom;
+
+    const path = data => data.map((p, i) => {
+      const x = left + (i / Math.max(1, data.length - 1)) * plotW;
+      const y = top + plotH - (p.value / max) * plotH;
+      return `${i ? "L" : "M"} ${x.toFixed(1)} ${y.toFixed(1)}`;
+    }).join(" ");
+
+    const points = (data, cls, kind) => data.map((p, i) => {
+      const x = left + (i / Math.max(1, data.length - 1)) * plotW;
+      const y = top + plotH - (p.value / max) * plotH;
+      return `<circle class="chart-point ${cls}" data-kind="${kind}" data-label="${this._escape(p.label)}" data-value="${p.value}" cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="5"></circle>`;
+    }).join("");
+
+    const grid = [0, .25, .5, .75, 1].map(r => {
+      const y = top + plotH - r * plotH;
+      const value = max * r;
+      return `<line class="grid" x1="${left}" y1="${y}" x2="${W-right}" y2="${y}"></line>
+        <text class="y-axis" x="${left-10}" y="${y+4}" text-anchor="end">${this._fmt(value,1)}</text>`;
+    }).join("");
+
+    const labels = consumed.map((p, i) => {
+      if (consumed.length > 8 && i % 2 !== 0) return "";
+      const x = left + (i / Math.max(1, consumed.length - 1)) * plotW;
+      return `<text class="axis" x="${x}" y="${H-12}" text-anchor="middle">${p.label}</text>`;
+    }).join("");
+
+    return `
+      <div class="chart-wrap">
+        <svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" role="img" aria-label="Zużycie energii z ostatnich dni">
+          <defs>
+            <linearGradient id="energyFill" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stop-color="#4f7cff" stop-opacity=".22"></stop>
+              <stop offset="100%" stop-color="#4f7cff" stop-opacity=".02"></stop>
+            </linearGradient>
+          </defs>
+          ${grid}
+          <path class="area-consumed" d="${path(consumed)} L ${W-right} ${top+plotH} L ${left} ${top+plotH} Z"></path>
+          <path class="line-consumed" d="${path(consumed)}"></path>
+          <path class="line-exported" d="${path(exported)}"></path>
+          ${points(consumed, "dot-consumed", "Pobór")}
+          ${points(exported, "dot-exported", "Oddanie")}
+          ${labels}
+        </svg>
+        <div class="chart-tooltip" hidden></div>
+      </div>
+    `;
+  }
+
   async _refresh() {
     const entity = this._config.refresh_entity;
     if (!this._hass || !entity || this._loading) return;
@@ -72,137 +627,270 @@
       this._render();
     }
   }
+
   _render() {
   if (!this.shadowRoot || !this._hass || !this._config.consumed_entity) return;
 
-  const c=this._config;
-  const consumed=this._num(c.consumed_entity,NaN);
-  const exported=this._num(c.exported_entity,NaN);
-  const dailyConsumed=this._todayDailyConsumed();
-  const dailyAverage=this._num(c.daily_average_entity,NaN);
-  const t1=this._num(c.t1_entity,NaN), t2=this._num(c.t2_entity,NaN), t3=this._num(c.t3_entity,NaN);
-  const t1Daily=this._num(c.t1_daily_entity,NaN), t2Daily=this._num(c.t2_daily_entity,NaN), t3Daily=this._num(c.t3_daily_entity,NaN);
-  const balance=this._num(c.balance_entity,NaN);
-  const dailyBudget=this._num(c.daily_budget_entity,NaN);
-  const days=this._num(c.days_entity,NaN);
-  const lastReading=this._state(c.last_reading_entity)?.state;
-  const lastFetch=this._state(c.last_fetch_entity)?.state;
-  const tariff=this._state(c.tariff_entity)?.state||"—";
-  const power=this._num(c.power_entity,NaN);
-  const cost=this._num(c.cost_entity,NaN);
-  const carbon=this._num(c.carbon_entity,NaN);
-  const meterNumber=this._state(c.meter_number_entity)?.state||"—";
-  const updated=lastFetch||lastReading;
+  const c = this._config;
+  const consumed = this._num(c.consumed_entity);
+  const exported = this._num(c.exported_entity);
+  const dailyConsumed = this._todayDailyConsumed();
+  const dailyExported = this._num(c.daily_exported_entity, NaN);
+  const dailyAverage = this._num(c.daily_average_entity, NaN);
+  const t1 = this._num(c.t1_entity, NaN);
+  const t2 = this._num(c.t2_entity, NaN);
+  const t3 = this._num(c.t3_entity, NaN);
+  const t1Daily = this._num(c.t1_daily_entity, NaN);
+  const t2Daily = this._num(c.t2_daily_entity, NaN);
+  const t3Daily = this._num(c.t3_daily_entity, NaN);
+  const balance = this._num(c.balance_entity);
+  const dailyBudget = this._num(c.daily_budget_entity, NaN);
+  const monthlyBudget = this._num(c.monthly_budget_entity, NaN);
+  const days = this._num(c.days_entity, NaN);
+  const billingStartConsumed = this._num(c.billing_start_consumed_entity, NaN);
+  const billingStartExported = this._num(c.billing_start_exported_entity, NaN);
+  const lastReading = this._state(c.last_reading_entity)?.state;
+  const lastFetch = this._state(c.last_fetch_entity)?.state;
+  const tariff = this._state(c.tariff_entity)?.state || "—";
+  const power = this._num(c.power_entity, NaN);
+  const cost = this._num(c.cost_entity, NaN);
+  const carbon = this._num(c.carbon_entity, NaN);
+  const updated = lastFetch || lastReading;
+  const balanceClass = balance < 0 ? "negative" : balance > 0 ? "positive" : "";
+  const budgetBase = Math.abs(dailyBudget);
+  const budgetPercent = budgetBase > 0 && Number.isFinite(dailyConsumed)
+    ? Math.min(100, Math.max(0, (dailyConsumed / budgetBase) * 100))
+    : 0;
+  const daysPercent = Number.isFinite(days) ? Math.max(0, Math.min(100, (days / 365) * 100)) : 0;
 
-  const budgetBase=Math.abs(dailyBudget);
-  const budgetPercent=budgetBase>0&&Number.isFinite(dailyConsumed)?Math.min(100,Math.max(0,(dailyConsumed/budgetBase)*100)):0;
+  const elapsedHours = Math.max(1, new Date().getHours() + new Date().getMinutes() / 60);
+  const avgPower = Number.isFinite(dailyConsumed) ? (dailyConsumed / elapsedHours) * 1000 : NaN;
+  const fmtPower = value => Number.isFinite(value)
+    ? `${this._fmt(value,0)} W`
+    : "—";
+  const fmtCost = value => Number.isFinite(value) ? `${this._fmt(value,2)} zł` : "—";
+  const fmtCarbon = value => Number.isFinite(value) ? `${this._fmt(value,1)} kg CO₂` : "—";
 
-  const history=this._chartHistorySeries()||[];
-  const selectedDate=this._selectedDate||this._dateKey(new Date());
-  const selectedLabel=this._dateLabel(selectedDate);
-  const selectedIndex=history.findIndex(x=>x.date===selectedDate);
-  const previous=selectedIndex>0?Number(history[selectedIndex-1]?.value):NaN;
-  const changePct=Number.isFinite(dailyConsumed)&&Number.isFinite(previous)&&previous>0?((dailyConsumed-previous)/previous)*100:NaN;
-  const changeText=Number.isFinite(changePct)
-    ? (changePct<=0?"↓":"↑")+" "+this._fmt(Math.abs(changePct),0)+"%"
-    : "Brak porównania";
+  const currentDate = this._dateKey(new Date());
+  const selectedDate = this._selectedDate || currentDate;
+  const selectedLabel = this._dateLabel(selectedDate);
+  const historyForStats = this._chartHistorySeries() || [];
+  const historyValues = historyForStats.map(x => Number(x.value)).filter(Number.isFinite);
+  const minCandidates = historyValues.filter(v => v >= 0);
+  const maxDaily30 = historyValues.length ? Math.max(...historyValues) : NaN;
+  const minDaily30 = minCandidates.length ? Math.min(...minCandidates) : NaN;
+  const total30 = historyValues.length ? historyValues.reduce((sum, v) => sum + v, 0) : NaN;
+  const status = Number.isFinite(dailyConsumed) && dailyConsumed > 0 ? "W porządku" : "Brak danych";
 
-  const values30=history.map(x=>Number(x.value)).filter(Number.isFinite);
-  const max30=values30.length?Math.max(...values30):NaN;
-  const min30=values30.length?Math.min(...values30):NaN;
-  const total30=values30.length?values30.reduce((s,v)=>s+v,0):NaN;
-
-  const fmtPower=v=>Number.isFinite(v)?this._fmt(v,0):"—";
-  const fmtMoney=v=>Number.isFinite(v)?this._fmt(v,2):"—";
-  const fmtCarbon=v=>Number.isFinite(v)?this._fmt(v,1):"—";
-  const currentDate=this._dateKey(new Date());
-
-  this.shadowRoot.innerHTML=`
+  this.shadowRoot.innerHTML = `
     <style>
       :host{
         display:block;width:100%;color-scheme:dark;
-        --bg:#030f19;--panel:#071a28;--card:#0a1d2c;--card2:#0c2132;
-        --border:#173a51;--text:#edf8ff;--muted:#8da8bc;
-        --blue:#2d9fff;--cyan:#62e8ff;--green:#28df86;--orange:#ff9b3d;--purple:#9d63ff;
+        --te-bg:#04111d;--te-panel:#081826;--te-card:#0b1d2c;--te-card2:#0e2234;
+        --te-border:#17354b;--te-border-2:#204864;--te-text:#edf7ff;--te-muted:#8ca7bd;
+        --te-blue:#299cff;--te-cyan:#5ee7ff;--te-green:#27dc84;--te-orange:#ff9b3d;
+        --te-purple:#9d63ff;--te-red:#ff5e70;--te-shadow:0 18px 50px rgba(0,0,0,.28);
         font-family:Inter,Roboto,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
       }
       *{box-sizing:border-box}
       .dashboard{
-        width:100%;padding:16px;border-radius:24px;overflow:hidden;color:var(--text);
+        width:100%;padding:18px;border-radius:24px;
         background:
-          radial-gradient(circle at 8% 0%,rgba(45,159,255,.13),transparent 27%),
-          radial-gradient(circle at 95% 4%,rgba(157,99,255,.10),transparent 23%),
-          linear-gradient(180deg,#061623 0%,#030e17 100%);
-        box-shadow:0 18px 52px rgba(0,0,0,.32)
+          radial-gradient(circle at 8% 0%,rgba(41,156,255,.13),transparent 28%),
+          radial-gradient(circle at 98% 12%,rgba(157,99,255,.10),transparent 22%),
+          linear-gradient(180deg,#061523 0%,#03101a 100%);
+        color:var(--te-text);box-shadow:var(--te-shadow);overflow:hidden;
       }
-      .topbar{display:flex;align-items:center;justify-content:space-between;gap:18px;margin-bottom:13px}
+      .topbar{display:flex;align-items:center;justify-content:space-between;gap:16px;margin-bottom:14px}
       .brand{display:flex;align-items:center;gap:10px;min-width:220px}
       .brand-mark{
         width:48px;height:48px;border-radius:15px;display:grid;place-items:center;
-        background:linear-gradient(145deg,#171239,#55206f);border:1px solid #70429a;box-shadow:0 10px 28px rgba(118,50,163,.24)
+        background:linear-gradient(145deg,#21153b,#471e69);border:1px solid #683e8f;
+        box-shadow:0 10px 30px rgba(123,73,255,.26)
       }
-      .brand-mark svg{width:34px;height:34px;filter:drop-shadow(0 0 8px rgba(255,59,145,.28))}
-      .brand h1{margin:0;font-size:20px;line-height:1;font-weight:900;letter-spacing:-.03em}.brand h1 span{display:block;color:#ff3b91;font-size:15px;margin-top:3px}.brand small{display:block;color:var(--muted);font-size:8px;margin-top:5px}
-      .nav{display:flex;align-items:center;gap:4px;padding:5px;border:1px solid #183b53;border-radius:999px;background:#081a29}
-      .nav b{padding:10px 24px;border-radius:999px;font-size:10px;color:#98b1c6;font-weight:700}.nav b.active{color:#fff;background:linear-gradient(180deg,#2c98ef,#176ec0);box-shadow:0 0 26px rgba(44,152,239,.34)}
-      .top-actions{display:flex;align-items:center;gap:8px}
-      .connection{display:flex;align-items:center;gap:8px;min-width:220px;padding:9px 12px;border:1px solid #193c53;border-radius:15px;background:rgba(8,27,41,.86)}
-      .connection i{width:10px;height:10px;border-radius:50%;background:#29df83;box-shadow:0 0 0 5px rgba(41,223,131,.08)}.connection strong{display:block;font-size:10px}.connection span{display:block;font-size:7px;color:var(--muted);margin-top:2px}
-      .refresh{width:36px;height:36px;border:1px solid #1b4058;background:#0a2132;border-radius:11px;color:#dff5ff;font-size:18px;cursor:pointer;transition:.16s}.refresh:hover{border-color:#2e91d5;background:#0d2a40}.refresh:focus-visible,.refresh-wide:focus-visible,.chart-tab:focus-visible{outline:2px solid var(--cyan);outline-offset:2px}
-      .spin{display:inline-block;animation:spin 1s linear infinite}@keyframes spin{to{transform:rotate(360deg)}}
+      .brand-mark svg{width:34px;height:34px;filter:drop-shadow(0 0 7px rgba(255,59,145,.28))}
+      .brand h1{margin:0;font-size:21px;letter-spacing:-.03em;line-height:1}
+      .brand h1 span{display:block;color:#ff3b93;font-size:16px;margin-top:2px}
+      .brand small{display:block;color:var(--te-muted);margin-top:5px;font-size:9px}
+      .nav{
+        display:flex;align-items:center;gap:5px;padding:5px;border:1px solid #19384e;
+        border-radius:999px;background:rgba(10,28,44,.8);box-shadow:inset 0 1px 0 rgba(255,255,255,.02)
+      }
+      .nav b{
+        padding:9px 24px;border-radius:999px;font-size:11px;color:#9bb4ca;font-weight:700;white-space:nowrap
+      }
+      .nav b.active{color:#fff;background:linear-gradient(180deg,#278fe9,#1972c5);box-shadow:0 0 28px rgba(41,156,255,.38)}
+      .connection{
+        min-width:220px;display:flex;align-items:center;justify-content:center;gap:9px;
+        padding:10px 14px;border:1px solid #1a3b51;border-radius:16px;background:rgba(11,30,45,.72)
+      }
+      .connection i{width:10px;height:10px;border-radius:50%;background:#26dd7d;box-shadow:0 0 0 5px rgba(38,221,125,.10)}
+      .connection strong{font-size:11px;color:#f4fbff}
+      .connection span{display:block;font-size:8px;color:var(--te-muted);margin-top:2px}
+      .refresh{
+        width:34px;height:34px;border:1px solid #1b3d55;background:#0b2235;color:#d9edff;border-radius:11px;
+        font-size:18px;cursor:pointer;transition:.18s ease
+      }
+      .refresh:hover{border-color:#318fd5;background:#102d43}
+      .refresh:focus-visible,button:focus-visible,select:focus-visible{outline:2px solid var(--te-cyan);outline-offset:2px}
+      .spin{display:inline-block;animation:spin 1s linear infinite}
+      @keyframes spin{to{transform:rotate(360deg)}}
 
-      .scene{position:relative;margin-bottom:12px;border:1px solid #18405a;border-radius:17px;overflow:hidden;background:#061624;box-shadow:0 14px 36px rgba(0,0,0,.24)}
-      .scene-topbar{position:absolute;z-index:8;left:16px;right:16px;top:12px;display:flex;justify-content:space-between;gap:10px;align-items:flex-start;text-shadow:0 2px 10px rgba(0,0,0,.82)}
-      .scene-kicker{font-size:7px;font-weight:900;letter-spacing:.15em;color:#70ddff}.scene-topbar strong{display:block;font-size:12px}.scene-topbar span{display:block;color:#bdd0df;font-size:7px;margin-top:2px}
-      .scene-status{display:flex;align-items:center;gap:6px;padding:6px 9px;border:1px solid rgba(91,168,205,.38);border-radius:999px;background:rgba(3,16,27,.72);font-size:8px;font-weight:800;white-space:nowrap}.scene-status i{width:6px;height:6px;border-radius:50%;background:#9eb0bf}
-      .flow-live .scene-status{color:#6ef0ad;border-color:rgba(39,223,133,.34)}.flow-live .scene-status i{background:#28df86;box-shadow:0 0 10px rgba(39,223,134,.8);animation:statusPulse 1.8s ease-out infinite}
-      @keyframes statusPulse{0%{box-shadow:0 0 0 0 rgba(39,223,134,.32)}70%{box-shadow:0 0 0 7px rgba(39,223,134,0)}100%{box-shadow:0 0 0 0 rgba(39,223,134,0)}}
-      .scene-art{position:relative;width:100%;aspect-ratio:1250/233;overflow:hidden;background:#071625;line-height:0}.scene-art img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;display:block}
-      .scene-motion{position:absolute;inset:0;z-index:4;width:100%;height:100%;pointer-events:none;overflow:hidden}.scene-motion-line{fill:none;stroke:#68e1ff;stroke-width:2.1;stroke-linecap:round;opacity:.22;stroke-dasharray:12 18}
-      .flow-live .scene-motion-line{animation:flowDash 1.4s linear infinite}@keyframes flowDash{to{stroke-dashoffset:-60}}
-      .scene-arrows{display:none}.flow-live .scene-arrows{display:block}.energy-arrow path{fill:none;stroke:#d8fbff;stroke-width:3.4;stroke-linecap:round;stroke-linejoin:round;filter:url(#sceneArrowGlow)}
-      .scene-meter-live{position:absolute;z-index:6;left:38.1%;top:39.4%;width:6.1%;height:17%;display:flex;align-items:center;justify-content:center;flex-direction:column;background:linear-gradient(180deg,rgba(242,252,255,.98),rgba(208,238,242,.98));border:1px solid rgba(66,97,112,.76);border-radius:6px;color:#132b38;box-shadow:0 0 10px rgba(58,205,255,.16);line-height:1}
-      .scene-meter-live strong{font:900 clamp(8px,1.08vw,16px)/1 monospace;letter-spacing:.02em}.scene-meter-live span{margin-top:2px;font:900 clamp(4px,.42vw,7px)/1 system-ui;color:#526b78}
-      .scene-data-strip{position:absolute;z-index:7;left:50%;bottom:5%;transform:translateX(-50%);display:flex;align-items:center;gap:3px;max-width:92%;padding:5px 8px;border:1px solid rgba(124,202,235,.28);border-radius:999px;background:rgba(3,18,29,.72);backdrop-filter:blur(7px);color:#c9dce8;font-size:6px;white-space:nowrap;box-shadow:0 6px 18px rgba(0,0,0,.24)}.scene-data-strip span{padding:0 5px;border-right:1px solid rgba(142,191,216,.18)}.scene-data-strip span:last-child{border-right:0}.scene-data-strip b{color:#f1f8fd;margin-right:2px}
-      .scene-vignette{position:absolute;z-index:3;inset:0;pointer-events:none;background:linear-gradient(90deg,rgba(2,11,20,.10),transparent 24%,transparent 76%,rgba(2,11,20,.10))}
-      .scene-bottom{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:8px 12px;border-top:1px solid #17384f;background:#06131f;color:#8da8bc;font-size:7px}.scene-bottom span{display:flex;align-items:center;gap:5px}.scene-bottom strong{font-size:8px;color:#e7f4fb}.flow-dot{width:6px;height:6px;border-radius:50%;background:#39d8ff;box-shadow:0 0 8px rgba(57,216,255,.7)}
+      .scene{
+        position:relative;margin-bottom:14px;overflow:hidden;border:1px solid #173b55;border-radius:18px;
+        background:#061624;box-shadow:0 14px 40px rgba(0,0,0,.22)
+      }
+      .scene-overlay{position:absolute;inset:0;background:linear-gradient(90deg,rgba(2,11,20,.18),transparent 45%,rgba(2,11,20,.15));pointer-events:none;z-index:1}
+      .scene-topbar{
+        position:absolute;z-index:3;left:18px;right:18px;top:14px;display:flex;justify-content:space-between;gap:12px;align-items:flex-start;
+        text-shadow:0 2px 12px rgba(0,0,0,.7)
+      }
+      .scene-topbar>div:first-child{display:flex;flex-direction:column;gap:2px}
+      .scene-kicker{font-size:8px;font-weight:900;letter-spacing:.15em;color:#6dd7ff}
+      .scene-topbar strong{font-size:13px}
+      .scene-topbar span{font-size:8px;color:#b2c8dc}
+      .scene-status{
+        display:flex;align-items:center;gap:7px;padding:7px 10px;border-radius:999px;
+        background:rgba(3,17,28,.72);border:1px solid rgba(87,145,180,.35);font-size:9px;font-weight:800
+      }
+      .scene-status i{width:7px;height:7px;border-radius:50%;background:#a8b9c8}
+      .flow-live .scene-status{color:#71efad;border-color:rgba(39,220,132,.35)}
+      .flow-live .scene-status i{background:#27dc84;box-shadow:0 0 12px rgba(39,220,132,.8);animation:sceneStatusPulse 1.8s ease-out infinite}
+      @keyframes sceneStatusPulse{0%{transform:scale(.85);box-shadow:0 0 0 0 rgba(39,220,132,.35)}70%{transform:scale(1);box-shadow:0 0 0 8px rgba(39,220,132,0)}100%{box-shadow:0 0 0 0 rgba(39,220,132,0)}}
+      .scene-svg{display:block;width:100%;height:auto;min-height:270px;aspect-ratio:1200/310}
+      .scene-label{font-family:system-ui,sans-serif;fill:#edf7ff;font-size:11px;font-weight:900;letter-spacing:.08em}
+      .scene-sub{font-family:system-ui,sans-serif;fill:#9ab3c8;font-size:8px;font-weight:600}
+      .scene-wire{fill:none;stroke:url(#powerBeam);stroke-width:5;stroke-linecap:round;filter:url(#sceneGlow)}
+      .scene-pole{filter:drop-shadow(0 0 10px rgba(99,190,255,.12))}
+      .scene-house{filter:drop-shadow(0 16px 26px rgba(0,0,0,.38))}
+      .scene-wire-glow{fill:none;stroke:#41a9ff;stroke-opacity:.18;stroke-width:15;stroke-linecap:round;filter:url(#sceneGlow)}
+      .scene-pulses{position:absolute;left:16%;right:16%;top:46%;height:20px;pointer-events:none;z-index:2}
+      .scene-pulses .pulse{
+        position:absolute;width:18px;height:18px;stroke:#c7f5ff;stroke-width:3;fill:none;
+        filter:drop-shadow(0 0 8px rgba(77,207,255,.95));animation:pulseTravel 3s linear infinite
+      }
+      .scene-pulses .pulse:nth-child(1){animation-delay:0s}.scene-pulses .pulse:nth-child(2){animation-delay:.5s}
+      .scene-pulses .pulse:nth-child(3){animation-delay:1s}.scene-pulses .pulse:nth-child(4){animation-delay:1.5s}
+      .scene-pulses .pulse:nth-child(5){animation-delay:2s}.scene-pulses .pulse:nth-child(6){animation-delay:2.5s}
+      @keyframes pulseTravel{0%{left:0;opacity:0;transform:scale(.75)}10%{opacity:1}85%{opacity:1}100%{left:92%;opacity:0;transform:scale(1.15)}}
+      .scene-device{filter:drop-shadow(0 12px 26px rgba(0,0,0,.32))}
+      .scene-meter rect:first-child,.scene-device>rect:first-child{transition:.2s ease}
+      .scene-meter:hover rect:first-child,.scene-device:hover>rect:first-child{stroke:#74caff}
+      .scene-caption rect{fill:rgba(2,14,24,.72);stroke:rgba(87,145,180,.35)}
+      .scene-caption circle{fill:#2bdc87;filter:drop-shadow(0 0 7px rgba(43,220,135,.75))}
+      .scene-caption text{fill:#c8dae8;font-size:7px;font-family:system-ui,sans-serif;font-weight:800;letter-spacing:.08em}
+      .scene-bottom{
+        position:relative;z-index:3;display:flex;align-items:center;justify-content:space-between;gap:12px;
+        padding:9px 14px;border-top:1px solid #17384e;background:rgba(5,19,30,.84);font-size:8px;color:#91aabd
+      }
+      .scene-bottom span{display:flex;align-items:center;gap:6px}.scene-bottom strong{color:#e8f5ff;font-size:9px}
+      .flow-dot{display:inline-block;width:6px;height:6px;border-radius:50%;background:#36d8ff;box-shadow:0 0 8px rgba(54,216,255,.65)}
 
-      .kpi-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:11px;margin-bottom:12px}.kpi{min-height:156px;position:relative;overflow:hidden;padding:15px;border:1px solid #17384e;border-radius:15px;background:linear-gradient(180deg,#0a1f2f,#071824);box-shadow:0 9px 22px rgba(0,0,0,.16)}
-      .kpi:nth-child(3){background:linear-gradient(180deg,#10202b,#081722)}.kpi:nth-child(4){background:linear-gradient(180deg,#0a211e,#071820)}
-      .kpi-top{display:flex;align-items:center;gap:10px}.kpi-icon{width:36px;height:36px;border-radius:11px;display:grid;place-items:center;background:#0e2c43;border:1px solid #214c67;color:#66d1ff;font-size:18px}.kpi:nth-child(3) .kpi-icon{background:#35210d;border-color:#68471e;color:#ffc252}.kpi:nth-child(4) .kpi-icon{background:#092b1f;border-color:#18523a;color:#5eeaa7}
-      .kpi-label{font-size:10px;color:#9fb7c9}.kpi-value{margin-top:14px;font-size:30px;font-weight:900;letter-spacing:-.04em;line-height:1}.kpi-value small{font-size:12px;color:#9fb8ca;font-weight:700}.kpi-sub{display:flex;flex-direction:column;gap:3px;margin-top:8px;font-size:8px;color:#849eaf}.kpi-sub strong{font-size:10px;color:#5eecaa}.kpi-sub strong.up{color:#ff9f63}.kpi-sub span{color:#7f98aa}
-      .kpi-bar{position:absolute;left:15px;right:15px;bottom:14px;height:6px;background:#102c41;border-radius:999px;overflow:hidden}.kpi-bar i{display:block;height:100%;border-radius:999px;background:linear-gradient(90deg,#2da4ff,#60e0ff)}.kpi:nth-child(3) .kpi-bar i{background:linear-gradient(90deg,#ff9636,#ffd06b)}.kpi:nth-child(4) .kpi-bar i{background:linear-gradient(90deg,#28d881,#83f2b9)}
-      .mini-trend{height:34px;margin-top:8px}.mini-trend svg{width:100%;height:100%;display:block}.mini-line{fill:none;stroke:#34db88;stroke-width:2.1;stroke-linecap:round}
+      .kpi-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin-bottom:14px}
+      .kpi{
+        min-height:150px;padding:16px;border-radius:16px;border:1px solid #17354b;
+        background:linear-gradient(180deg,#0a1d2c,#071827);box-shadow:0 10px 24px rgba(0,0,0,.16);overflow:hidden;position:relative
+      }
+      .kpi::after{content:"";position:absolute;width:130px;height:130px;right:-55px;top:-55px;border-radius:50%;background:radial-gradient(circle,rgba(41,156,255,.10),transparent 70%)}
+      .kpi-top{display:flex;align-items:center;justify-content:space-between;gap:9px}
+      .kpi-icon{
+        width:36px;height:36px;border-radius:12px;display:grid;place-items:center;font-size:18px;
+        background:#0d2b43;border:1px solid #1f4a67;color:#64ceff;box-shadow:inset 0 0 20px rgba(41,156,255,.08)
+      }
+      .kpi.orange .kpi-icon{background:#30200e;border-color:#64451f;color:#ffc04b}.kpi.green .kpi-icon{background:#082a1d;border-color:#174e37;color:#5deca8}.kpi.purple .kpi-icon{background:#211536;border-color:#50327a;color:#bf91ff}
+      .kpi-label{color:#9db6ca;font-size:11px}
+      .kpi-value{margin-top:13px;font-size:31px;font-weight:900;letter-spacing:-.035em;line-height:1}
+      .kpi-value small{font-size:13px;color:#9fb7cb;font-weight:700;letter-spacing:0}
+      .kpi-sub{margin-top:9px;color:#a7bdd0;font-size:9px}
+      .kpi-sub strong{display:block;color:#65ebaa;font-size:9px;margin-top:3px}
+      .kpi-bar{position:absolute;left:16px;right:16px;bottom:15px;height:6px;border-radius:99px;background:#102c41;overflow:hidden}
+      .kpi-bar i{display:block;height:100%;border-radius:inherit;background:linear-gradient(90deg,#31a6ff,#6de5ff);max-width:100%}
+      .kpi.orange .kpi-bar i{background:linear-gradient(90deg,#ff9c3a,#ffd071)}.kpi.green .kpi-bar i{background:linear-gradient(90deg,#28d883,#83f4bd)}
+      .kpi.purple .kpi-bar i{background:linear-gradient(90deg,#9554ff,#c49aff)}
 
-      .main-grid{display:grid;grid-template-columns:minmax(0,1.08fr) minmax(0,1fr);gap:12px;margin-bottom:12px}.panel-card{min-width:0;border:1px solid #17384f;border-radius:17px;background:linear-gradient(180deg,#091d2b,#071724);padding:15px;box-shadow:0 10px 25px rgba(0,0,0,.16)}
-      .card-head{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:11px}.card-head strong{font-size:14px;letter-spacing:-.015em}.card-head span{display:block;color:#829bad;font-size:8px;margin-top:2px}.pill{padding:7px 10px;border:1px solid #20506e;background:#0b2c45;color:#65caff;border-radius:999px;font-size:9px;font-weight:900}
-      .zone-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}.zone{padding:12px;border:1px solid #1a3c55;border-radius:13px;background:linear-gradient(180deg,#0a2131,#071824)}.zone .badge{display:inline-flex;align-items:center;justify-content:center;min-width:45px;height:27px;padding:0 10px;border-radius:9px;font-size:10px;font-weight:900}
-      .z1{border-color:#174365}.z2{border-color:#604520}.z3{border-color:#4b3272}.z1 .badge{background:linear-gradient(180deg,#1687f7,#126bcc);border:1px solid #39aaff;color:#fff;box-shadow:0 0 16px rgba(45,159,255,.24)}.z2 .badge{background:linear-gradient(180deg,#ffad42,#f57c1f);border:1px solid #ffca70;color:#fff;box-shadow:0 0 16px rgba(255,155,61,.20)}.z3 .badge{background:linear-gradient(180deg,#a967ff,#7d43d7);border:1px solid #bd91ff;color:#fff;box-shadow:0 0 16px rgba(157,99,255,.22)}
-      .zone small{display:block;margin-top:7px;color:#7f99ab;font-size:8px}.zone>b{display:block;margin-top:9px;font-size:20px;letter-spacing:-.02em}.zone>b i{font-style:normal;color:#90a9ba;font-size:9px}.zone-footer{display:flex;align-items:center;justify-content:space-between;gap:7px;margin-top:10px;padding-top:9px;border-top:1px solid #17364a;color:#7e98aa;font-size:8px}.zone-footer strong{font-size:10px}.z1 .zone-footer strong{color:#61c5ff}.z2 .zone-footer strong{color:#ffb65f}.z3 .zone-footer strong{color:#c39cff}
+      .main-grid{display:grid;grid-template-columns:minmax(0,1.12fr) minmax(0,1fr);gap:12px;margin-bottom:12px}
+      .panel-card{border:1px solid #17354b;border-radius:17px;background:linear-gradient(180deg,#091b29,#071725);padding:16px;box-shadow:0 10px 26px rgba(0,0,0,.16)}
+      .card-head{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:13px}
+      .card-head strong{font-size:15px;letter-spacing:-.015em}
+      .card-head span{display:block;color:#859fb4;font-size:9px;margin-top:2px}
+      .pill{padding:7px 10px;border:1px solid #204966;border-radius:999px;background:#0c2b45;color:#61c8ff;font-size:9px;font-weight:900}
+      .zone-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:9px}
+      .zone{
+        border:1px solid #193c53;border-radius:14px;padding:13px;background:linear-gradient(180deg,#0a2030,#071825);min-width:0
+      }
+      .zone .badge{
+        display:inline-flex;align-items:center;justify-content:center;min-width:42px;height:25px;padding:0 10px;
+        border-radius:9px;font-size:10px;font-weight:900
+      }
+      .z1 .badge{background:#14365e;color:#69c3ff;border:1px solid #225b94}.z2 .badge{background:#3c2a10;color:#ffc45c;border:1px solid #795421}.z3 .badge{background:#312052;color:#bf96ff;border:1px solid #65419b}
+      .zone small{display:block;color:#7994aa;font-size:8px;margin-top:7px}.zone>b{display:block;margin-top:8px;font-size:20px}.zone>b i{font-style:normal;font-size:10px;color:#8ba5ba}
+      .zone-footer{display:flex;justify-content:space-between;gap:8px;margin-top:12px;padding-top:9px;border-top:1px solid #17354a;color:#7993a9;font-size:8px}
+      .zone-footer strong{color:#e3f1fb;font-size:11px}
 
-      .chart-inner{position:relative;width:100%;height:252px}.chart-summary{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:4px}.chart-summary>div:first-child{display:flex;align-items:baseline;gap:8px;flex-wrap:wrap}.chart-summary strong{font-size:27px;letter-spacing:-.04em}.chart-summary span{font-size:8px;color:#7894a8}.chart-summary em{font-style:normal;color:#5aeba6;font-size:9px;font-weight:900}.chart-summary em.up{color:#ff9f63}.chart-tabs{display:flex;align-items:center;gap:3px;padding:4px;background:#0a1b2a;border:1px solid #183a51;border-radius:999px}.chart-tab{border:0;background:transparent;color:#91a8ba;border-radius:999px;padding:7px 10px;font-size:8px;cursor:pointer}.chart-tab.active{color:#fff;background:linear-gradient(180deg,#2b98f0,#176fc1);box-shadow:0 0 18px rgba(43,152,240,.28)}
-      .chart-inner svg{display:block;width:100%;height:208px;overflow:visible}.chart-grid{stroke:#17364b;stroke-width:1}.chart-axis-y,.chart-axis-x{fill:#7894a8;font-size:8px}.hourbar rect{transition:filter .15s ease,transform .15s ease;transform-box:fill-box;transform-origin:center bottom}.hourbar:hover rect,.hourbar:focus rect{filter:brightness(1.22);transform:scaleY(1.025)}.bar-t1{fill:#319fff;filter:drop-shadow(0 0 4px rgba(49,159,255,.24))}.bar-t2{fill:#ff9b3d;filter:drop-shadow(0 0 4px rgba(255,155,61,.18))}.bar-t3{fill:#9b63ff;filter:drop-shadow(0 0 4px rgba(155,99,255,.24))}
-      .chart-legend{display:flex;gap:16px;margin-top:-2px;color:#819bad;font-size:8px}.chart-legend span{display:inline-flex;align-items:center;gap:5px}.chart-legend i{width:7px;height:7px;border-radius:50%;display:inline-block}.legend-blue{background:#319fff}.legend-orange{background:#ff9b3d}.legend-purple{background:#9b63ff}.chart-empty{height:220px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:5px;color:#7d98aa}.chart-empty strong{color:#dceaf4;font-size:11px}.chart-empty span{font-size:8px}
+      .chart-wrap{position:relative;width:100%;height:250px}
+      .chart-wrap svg{display:block;width:100%;height:100%;overflow:visible}
+      .grid{stroke:#163349;stroke-width:1}.axis,.y-axis{fill:#7894aa;font-size:9px}.area-consumed{fill:url(#energyFill)}
+      .line-consumed{fill:none;stroke:#32a5ff;stroke-width:3;stroke-linecap:round;stroke-linejoin:round;filter:drop-shadow(0 0 5px rgba(50,165,255,.28))}
+      .line-exported{fill:none;stroke:#2dd787;stroke-width:2.5;stroke-linecap:round;stroke-linejoin:round}
+      .dot-consumed{fill:#38a7ff;stroke:#071726;stroke-width:3}.dot-exported{fill:#35d88b;stroke:#071726;stroke-width:3}
+      .chart-point{cursor:pointer;transition:r .12s ease}.chart-point:hover{r:7}
+      .chart-tooltip{
+        position:absolute;z-index:5;min-width:145px;padding:9px 11px;border-radius:10px;
+        background:#0a1a29;color:#fff;border:1px solid #234864;box-shadow:0 12px 28px rgba(0,0,0,.36);pointer-events:none;font-size:11px
+      }
+      .chart-tooltip[hidden]{display:none}.chart-tooltip strong,.chart-tooltip span,.chart-tooltip b{display:block}
+      .chart-tooltip span{margin-top:3px;color:#9eb6ca}.chart-tooltip b{margin-top:4px;font-size:13px}
+      .legend{display:flex;gap:18px;flex-wrap:wrap;color:#86a0b5;font-size:9px;margin-top:4px}
+      .legend i{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:5px}.legend .c{background:#38a7ff}.legend .e{background:#35d88b}
 
-      .bottom-grid{display:grid;grid-template-columns:minmax(0,1.48fr) minmax(230px,.88fr) minmax(230px,.92fr);gap:12px;align-items:stretch}.context{height:100%;margin:0}.pse-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}.pse-card{padding:10px;border:1px solid #193b52;border-radius:12px;background:#081b2a}.pse-card-head{display:flex;justify-content:space-between;gap:8px;align-items:flex-start}.pse-card-head strong{display:block;font-size:10px}.pse-card-head span{display:block;margin-top:2px;color:#7793a6;font-size:7px}.pse-card-head>b{padding:5px 7px;border-radius:999px;font-size:7px;white-space:nowrap;background:#10283a;color:#90a8ba}.pse-card-head>b.pse-darkgreen{background:#093523;color:#6ce8aa}.pse-card-head>b.pse-green{background:#103024;color:#91d9b1}.pse-card-head>b.pse-yellow{background:#3d2f0b;color:#ffd060}.pse-card-head>b.pse-red{background:#3b1820;color:#ff8798}
-      .pse-timeline{display:grid;grid-template-columns:repeat(24,minmax(0,1fr));gap:2px;margin-top:9px}.pse-hour{text-align:center;min-width:0}.pse-hour span{display:block;color:#708ba0;font-size:5px;margin-bottom:3px}.pse-hour i{display:block;width:12px;height:12px;margin:0 auto;border-radius:50%;background:#1a3142}.pse-hour.pse-darkgreen i{background:#25c17a}.pse-hour.pse-green i{background:#71c493}.pse-hour.pse-yellow i{background:#e9b63f}.pse-hour.pse-red i{background:#dd5968}.pse-empty{grid-column:1/-1;padding:10px 0;color:#7893a8;font-size:8px}.pse-legend{display:flex;flex-wrap:wrap;gap:9px;margin-top:8px;color:#7892a5;font-size:7px}.pse-legend span{display:inline-flex;align-items:center;gap:5px}.pse-legend i{width:6px;height:6px;border-radius:50%}.legend-darkgreen{background:#25c17a}.legend-green{background:#71c493}.legend-yellow{background:#e9b63f}.legend-red{background:#dd5968}
+      .context{margin-bottom:12px}
+      .pse-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+      .pse-card{padding:13px;border:1px solid #19394f;border-radius:14px;background:#081b2a}
+      .pse-card-head{display:flex;justify-content:space-between;gap:10px;align-items:flex-start}
+      .pse-card-head strong{display:block;font-size:11px;color:#e8f5ff}.pse-card-head span{display:block;margin-top:2px;font-size:8px;color:#7d98ad}
+      .pse-card-head>b{padding:5px 8px;border-radius:999px;font-size:8px;white-space:nowrap;background:#10283a;color:#91a8ba}
+      .pse-card-head>b.pse-darkgreen{background:#093523;color:#6ce7ab}.pse-card-head>b.pse-green{background:#0f3023;color:#8dd9af}
+      .pse-card-head>b.pse-yellow{background:#3b2d0b;color:#ffd15f}.pse-card-head>b.pse-red{background:#3a1720;color:#ff8797}
+      .pse-timeline{display:grid;grid-template-columns:repeat(24,minmax(0,1fr));gap:3px;margin-top:11px}
+      .pse-hour{text-align:center;min-width:0}.pse-hour span{display:block;color:#708ca2;font-size:6px;margin-bottom:3px}.pse-hour i{display:block;height:18px;border-radius:4px;background:#1a3141}
+      .pse-hour.pse-darkgreen i{background:#25be79}.pse-hour.pse-green i{background:#6ebe92}.pse-hour.pse-yellow i{background:#e9b63f}.pse-hour.pse-red i{background:#dd5968}
+      .pse-empty{grid-column:1/-1;padding:11px 0;color:#7893a8;font-size:9px}
+      .pse-legend{display:flex;gap:13px;flex-wrap:wrap;margin-top:9px;color:#7893a8;font-size:8px}.pse-legend span{display:inline-flex;align-items:center;gap:5px}.pse-legend i{width:7px;height:7px;border-radius:50%}
+      .legend-darkgreen{background:#25be79}.legend-green{background:#6ebe92}.legend-yellow{background:#e9b63f}.legend-red{background:#dd5968}
 
-      .stats-list{display:grid;gap:2px}.stat-row{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:9px 0;border-bottom:1px solid #143247}.stat-row:last-child{border-bottom:0}.stat-left{display:flex;align-items:center;gap:8px;color:#89a2b5;font-size:8px}.stat-left i{width:28px;height:28px;border-radius:9px;background:#0d2b3e;display:grid;place-items:center;color:#5ecbff;font-size:12px}.stat-row:nth-child(2) .stat-left i{color:#4ce2ff}.stat-row:nth-child(3) .stat-left i{color:#ff7e91}.stat-row:nth-child(4) .stat-left i{color:#c788ff}.stat-row strong{font-size:10px;white-space:nowrap}
-      .info-grid{display:grid;grid-template-columns:1fr 1fr;gap:7px}.info{padding:9px;border:1px solid #17384d;border-radius:10px;background:#081b2a}.info-label{color:#728da2;font-size:6px;text-transform:uppercase;letter-spacing:.09em}.info-value{margin-top:5px;color:#e6f3fb;font-size:9px;font-weight:800}.status-live-dot{display:inline-block;width:6px;height:6px;border-radius:50%;background:#28df85;box-shadow:0 0 8px rgba(40,223,133,.7);margin-right:4px}.full{grid-column:1/-1}.refresh-wide{width:100%;height:38px;margin-top:9px;border:1px solid #20537a;border-radius:10px;background:#0a2d48;color:#d8effc;font-weight:800;font-size:9px;cursor:pointer}.refresh-wide:hover{background:#0e3755}
-      .footer{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:9px 2px 0;color:#658198;font-size:7px}
+      .bottom-grid{display:grid;grid-template-columns:1.15fr .85fr;gap:12px}
+      .stats-list{display:grid;gap:4px}
+      .stat-row{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:11px 0;border-bottom:1px solid #153247}
+      .stat-row:last-child{border-bottom:0}.stat-left{display:flex;align-items:center;gap:9px;color:#87a1b6;font-size:10px}.stat-left i{width:28px;height:28px;border-radius:9px;display:grid;place-items:center;background:#0d2c40;color:#59c7ff}
+      .stat-row:nth-child(2) .stat-left i{color:#3fe8ff}.stat-row:nth-child(3) .stat-left i{color:#ff7a8b}.stat-row:nth-child(4) .stat-left i{color:#c285ff}
+      .stat-row strong{font-size:12px;color:#e7f3fb;white-space:nowrap}
+      .info-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+      .info{padding:10px;border:1px solid #17364b;background:#081b2a;border-radius:11px}.info-label{color:#748fa4;font-size:7px;text-transform:uppercase;letter-spacing:.08em}.info-value{margin-top:5px;color:#e6f3fc;font-size:10px;font-weight:800}
+      .status-live-dot{display:inline-block;width:7px;height:7px;border-radius:50%;background:#27dc84;box-shadow:0 0 9px rgba(39,220,132,.7);margin-right:5px}
+      .full{grid-column:1/-1}
+      .refresh-wide{width:100%;margin-top:10px;height:39px;border-radius:10px;border:1px solid #20527a;background:#0b2b44;color:#cdeaff;font-weight:800;cursor:pointer}
+      .refresh-wide:hover{background:#0e3755}
+      .footer{display:flex;justify-content:space-between;gap:12px;color:#668399;font-size:8px;padding:9px 2px 0}
+      .muted{color:#7f99ad}.data-missing{color:#778fa3;font-weight:700}
+      .mini-trend{height:40px;margin-top:11px}.mini-trend svg{width:100%;height:100%;display:block}
+      .mini-line{fill:none;stroke:#33dc8b;stroke-width:2.2;stroke-linecap:round}.mini-fill{fill:url(#miniFill)}
+      .cost-note,.carbon-note{margin-top:6px;font-size:8px;color:#718b9f}
+      .budget-ring{position:absolute;right:14px;top:14px;width:48px;height:48px;border-radius:50%;background:conic-gradient(#36aaff ${budgetPercent}%,#173148 0);display:grid;place-items:center}
+      .budget-ring::before{content:"";position:absolute;inset:5px;background:#091a29;border-radius:50%}.budget-ring span{position:relative;font-size:9px;font-weight:900}
 
       @media(prefers-reduced-motion:reduce){
-        .flow-live .scene-status i,.flow-live .scene-motion-line,.scene-arrows .energy-arrow,.spin{animation:none!important}
+        .flow-live .scene-status i,.scene-pulses .pulse,.spin{animation:none!important}
       }
       @media(max-width:1050px){
-        .nav b{padding:9px 15px}.connection{min-width:160px}.main-grid{grid-template-columns:1fr}.bottom-grid{grid-template-columns:1fr 1fr}.bottom-grid .context{grid-column:1/-1}.kpi-grid{grid-template-columns:repeat(2,1fr)}
+        .nav b{padding:9px 16px}.connection{min-width:170px}.kpi-grid{grid-template-columns:repeat(2,1fr)}
+        .main-grid,.bottom-grid{grid-template-columns:1fr}
       }
       @media(max-width:700px){
         .dashboard{padding:10px;border-radius:18px}.topbar{align-items:flex-start}.nav{display:none}.connection{min-width:0;padding:8px}.connection span{display:none}
         .brand{min-width:0}.brand-mark{width:42px;height:42px}.brand h1{font-size:18px}.brand h1 span{font-size:14px}
-        .scene-topbar{left:10px;right:10px;top:9px}.scene-topbar strong{font-size:9px}.scene-status{padding:6px 7px;font-size:7px}.scene-meter-live{left:38%;top:39%;width:6.4%;height:18%}.scene-data-strip{font-size:5px;max-width:95%;gap:1px}.scene-data-strip span{padding:0 3px}
-        .kpi-grid{grid-template-columns:1fr 1fr}.kpi{min-height:136px;padding:12px}.kpi-value{font-size:23px}
-        .zone-grid,.pse-grid,.bottom-grid{grid-template-columns:1fr}.chart-tabs{display:none}.chart-inner{height:228px}.chart-inner svg{height:185px}.info-grid{grid-template-columns:1fr}.scene-bottom{align-items:flex-start;flex-direction:column}.footer{flex-direction:column}
+        .scene-topbar{left:12px;right:12px;top:10px}.scene-topbar strong{font-size:10px}.scene-status{padding:6px 8px;font-size:8px}.scene-svg{min-height:245px}
+        .scene-bottom{align-items:flex-start;flex-direction:column}.kpi-grid{grid-template-columns:1fr 1fr}.kpi{min-height:135px;padding:13px}.kpi-value{font-size:24px}
+        .zone-grid,.pse-grid{grid-template-columns:1fr}.info-grid{grid-template-columns:1fr}.footer{flex-direction:column}.chart-wrap{height:220px}
       }
     </style>
 
@@ -215,12 +903,22 @@
               <path d="M8 19c4 5 10 8 18 8 5 0 10-1 14-4-2 7-8 12-16 14-6-1-11-4-15-9-3-4-3-6-1-9z" fill="#7b49ff" opacity=".92"/>
             </svg>
           </div>
-          <div><h1>TAURON <span>eLicznik</span></h1><small>${this._escape(c.title||"Energia")} · zużycie i analiza</small></div>
+          <div>
+            <h1>TAURON <span>eLicznik</span></h1>
+            <small>${this._escape(c.title || "Energia")} · zużycie i analiza</small>
+          </div>
         </div>
-        <nav class="nav" aria-label="Sekcje panelu"><b class="active">Energia</b><b>Analiza</b><b>Taryfa</b><b>Ustawienia</b></nav>
-        <div class="top-actions">
-          <div class="connection"><i></i><div><strong>Połączony</strong><span>${updated?this._date(updated):"Brak danych"}</span></div></div>
-          <button class="refresh" data-refresh title="Odśwież dane Tauron" aria-label="Odśwież dane Tauron" ${this._loading?"disabled":""}><span class="${this._loading?"spin":""}">↻</span></button>
+
+        <nav class="nav" aria-label="Sekcje panelu">
+          <b class="active">Energia</b><b>Analiza</b><b>Taryfa</b><b>Ustawienia</b>
+        </nav>
+
+        <div class="top-actions" style="display:flex;align-items:center;gap:8px">
+          <div class="connection">
+            <i></i>
+            <div><strong>Połączony</strong><span>Ostatnia aktualizacja · ${updated ? this._date(updated) : "brak danych"}</span></div>
+          </div>
+          <button class="refresh" title="Odśwież dane Tauron" aria-label="Odśwież dane Tauron" ${this._loading ? "disabled" : ""}><span class="${this._loading ? "spin" : ""}">↻</span></button>
         </div>
       </header>
 
@@ -228,71 +926,104 @@
 
       <section class="kpi-grid" aria-label="Podsumowanie energii">
         <article class="kpi">
-          <div class="kpi-top"><div class="kpi-icon">⌂</div><span class="kpi-label">Pobór dzisiaj</span></div>
-          <div class="kpi-value">${Number.isFinite(dailyConsumed)?this._fmt(dailyConsumed,2):"—"} <small>kWh</small></div>
-          <div class="kpi-sub"><strong class="${changePct>0?"up":""}">${this._escape(changeText)}</strong><span>porównanie z poprzednim dniem</span></div>
+          <div class="budget-ring"><span>${this._fmt(budgetPercent,0)}%</span></div>
+          <div class="kpi-top"><div class="kpi-icon">♧</div><span class="kpi-label">Pobór dzisiaj</span></div>
+          <div class="kpi-value">${Number.isFinite(dailyConsumed) ? this._fmt(dailyConsumed,2) : "—"} <small>kWh</small></div>
+          <div class="kpi-sub">${selectedLabel}<strong>${status === "W porządku" ? "↓ w normie" : "Brak danych"}</strong></div>
           <div class="kpi-bar"><i style="width:${budgetPercent}%"></i></div>
         </article>
 
         <article class="kpi">
-          <div class="kpi-top"><div class="kpi-icon">⚡</div><span class="kpi-label">Moc chwilowa</span></div>
-          <div class="kpi-value">${fmtPower(power)} <small>W</small></div>
-          <div class="kpi-sub"><span>${Number.isFinite(power)?"Odczyt chwilowy z HAN":"Brak encji mocy chwilowej"}</span></div>
-          <div class="mini-trend"><svg viewBox="0 0 220 40" preserveAspectRatio="none" aria-hidden="true"><polyline class="mini-line" points="0,31 16,25 31,28 47,19 63,23 79,15 95,21 111,10 127,18 143,13 159,20 175,10 191,16 207,7 220,11"/></svg></div>
+          <div class="kpi-top"><div class="kpi-icon">⚡</div><span class="kpi-label">Moc średnia dzisiaj</span></div>
+          <div class="kpi-value">${fmtPower(avgPower)}</div>
+          <div class="kpi-sub">wyliczona z dziennego zużycia</div>
+          <div class="mini-trend">
+            <svg viewBox="0 0 220 40" preserveAspectRatio="none" aria-hidden="true">
+              <polyline class="mini-line" points="0,30 16,24 31,28 47,18 63,23 79,14 95,20 111,9 127,18 143,12 159,20 175,10 191,16 207,6 220,10"/>
+            </svg>
+          </div>
         </article>
 
-        <article class="kpi">
+        <article class="kpi orange">
           <div class="kpi-top"><div class="kpi-icon">◉</div><span class="kpi-label">Koszt dzisiaj</span></div>
-          <div class="kpi-value">${fmtMoney(cost)} <small>zł</small></div>
-          <div class="kpi-sub"><strong style="color:#ffc45c">Taryfa ${this._escape(String(tariff))}</strong><span>${Number.isFinite(cost)?"Z danych Home Assistant":"Brak encji kosztu"}</span></div>
+          <div class="kpi-value">${fmtCost(cost)}</div>
+          <div class="kpi-sub">Taryfa <strong style="color:#ffc45c">${this._escape(String(tariff))}</strong></div>
+          <div class="cost-note">${Number.isFinite(cost) ? "Koszt z encji Home Assistant" : "Brak skonfigurowanej encji kosztu"}</div>
         </article>
 
-        <article class="kpi">
+        <article class="kpi green">
           <div class="kpi-top"><div class="kpi-icon">⌁</div><span class="kpi-label">Ślad węglowy</span></div>
-          <div class="kpi-value">${fmtCarbon(carbon)} <small>CO₂</small></div>
-          <div class="kpi-sub"><strong style="color:#59e9a5">CO₂</strong><span>${Number.isFinite(carbon)?"Wartość z Home Assistant":"Brak encji CO₂"}</span></div>
+          <div class="kpi-value">${fmtCarbon(carbon)}</div>
+          <div class="kpi-sub">na podstawie danych energetycznych</div>
+          <div class="carbon-note">${Number.isFinite(carbon) ? "Wartość z encji Home Assistant" : "Brak skonfigurowanej encji CO₂"}</div>
         </article>
       </section>
 
       <div class="main-grid">
         <section class="panel-card">
-          <div class="card-head"><div><strong>Strefy taryfowe — ${this._escape(String(tariff))}</strong><span>Stan licznika i zużycie dzisiaj</span></div><div class="pill">Taryfa ${this._escape(String(tariff))}</div></div>
+          <div class="card-head">
+            <div><strong>Strefy taryfowe — ${this._escape(String(tariff))}</strong><span>Stan licznika i zużycie dzisiaj</span></div>
+            <div class="pill">${this._escape(String(tariff))}</div>
+          </div>
           <div class="zone-grid">
-            <article class="zone z1"><span class="badge">T1 ☾</span><small>Strefa T1</small><b>${Number.isFinite(t1)?this._fmt(t1,0):"—"} <i>kWh</i></b><div class="zone-footer"><span>Dzisiaj</span><strong>${Number.isFinite(t1Daily)?this._fmt(t1Daily,1):"—"} kWh</strong></div></article>
-            <article class="zone z2"><span class="badge">T2 ☀</span><small>Strefa T2</small><b>${Number.isFinite(t2)?this._fmt(t2,0):"—"} <i>kWh</i></b><div class="zone-footer"><span>Dzisiaj</span><strong>${Number.isFinite(t2Daily)?this._fmt(t2Daily,1):"—"} kWh</strong></div></article>
-            <article class="zone z3"><span class="badge">T3 ◐</span><small>Strefa T3</small><b>${Number.isFinite(t3)?this._fmt(t3,0):"—"} <i>kWh</i></b><div class="zone-footer"><span>Dzisiaj</span><strong>${Number.isFinite(t3Daily)?this._fmt(t3Daily,1):"—"} kWh</strong></div></article>
+            <article class="zone z1">
+              <span class="badge">T1 ☾</span><small>Strefa T1</small>
+              <b>${Number.isFinite(t1) ? this._fmt(t1,0) : "—"} <i>kWh</i></b>
+              <div class="zone-footer"><span>Dzisiaj</span><strong>${Number.isFinite(t1Daily) ? this._fmt(t1Daily,1) : "—"} kWh</strong></div>
+            </article>
+            <article class="zone z2">
+              <span class="badge">T2 ☀</span><small>Strefa T2</small>
+              <b>${Number.isFinite(t2) ? this._fmt(t2,0) : "—"} <i>kWh</i></b>
+              <div class="zone-footer"><span>Dzisiaj</span><strong>${Number.isFinite(t2Daily) ? this._fmt(t2Daily,1) : "—"} kWh</strong></div>
+            </article>
+            <article class="zone z3">
+              <span class="badge">T3 ◐</span><small>Strefa T3</small>
+              <b>${Number.isFinite(t3) ? this._fmt(t3,0) : "—"} <i>kWh</i></b>
+              <div class="zone-footer"><span>Dzisiaj</span><strong>${Number.isFinite(t3Daily) ? this._fmt(t3Daily,1) : "—"} kWh</strong></div>
+            </article>
           </div>
         </section>
 
         <section class="panel-card">
-          <div class="card-head"><div><strong>Zużycie energii</strong><span>Godzinowy profil · ${selectedLabel}</span></div>
-            <div style="display:flex;gap:5px">
-              <button class="refresh" data-energy-today title="Dzisiaj" aria-label="Dzisiaj">⌂</button>
-              <button class="refresh" data-energy-date="-1" title="Poprzedni dzień" aria-label="Poprzedni dzień">‹</button>
-              <button class="refresh" data-energy-date="1" title="Następny dzień" aria-label="Następny dzień" ${currentDate===selectedDate?"disabled":""}>›</button>
-            </div>
+          <div class="card-head">
+            <div><strong>Zużycie energii</strong><span>${selectedLabel} · ostatnie ${Number(c.days_history || 14)} dni</span></div>
+            <div class="pill">${Number.isFinite(dailyConsumed) ? this._fmt(dailyConsumed,1) : "—"} kWh</div>
+          </div>
+          <div style="display:flex;justify-content:flex-end;gap:5px;margin:-5px 0 6px">
+            <button class="refresh" data-energy-today title="Pokaż dzisiaj" aria-label="Pokaż dzisiaj">⌂</button>
+            <button class="refresh" data-energy-date="-1" title="Poprzedni dzień" aria-label="Poprzedni dzień">‹</button>
+            <button class="refresh" data-energy-date="1" title="Następny dzień" aria-label="Następny dzień" ${this._dateKey(new Date()) === selectedDate ? "disabled" : ""}>›</button>
           </div>
           ${this._chartSvg()}
+          <div class="legend"><span><i class="c"></i>Pobór (kWh)</span><span><i class="e"></i>Oddanie (kWh)</span></div>
         </section>
       </div>
 
-      <div class="bottom-grid">
-        <section class="panel-card context">
-          <div class="card-head"><div><strong>Energetyczny Kompas PSE</strong><span>Prognoza na podstawie danych PSE i taryfy ${this._escape(String(tariff))}</span></div><div class="pill">${this._escape(String(tariff))}</div></div>
-          <div class="pse-grid">
-            ${this._pseCard("Dzisiaj","Energetyczne godziny szczytu",c.pse_today_entity)}
-            ${this._pseCard("Jutro · D+1","Planowane energetyczne godziny szczytu",c.pse_tomorrow_entity)}
-          </div>
-          <div class="pse-legend"><span><i class="legend-darkgreen"></i>Zalecane użytkowanie</span><span><i class="legend-green"></i>Normalne użytkowanie</span><span><i class="legend-yellow"></i>Zalecane oszczędzanie</span><span><i class="legend-red"></i>Wymagane ograniczenie</span></div>
-        </section>
+      <section class="panel-card context">
+        <div class="card-head">
+          <div><strong>Energetyczny Kompas</strong><span>Prognoza na podstawie danych PSE</span></div>
+          <div class="pill">Taryfa ${this._escape(String(tariff))}</div>
+        </div>
+        <div class="pse-grid">
+          ${this._pseCard("Dzisiaj", "Energetyczne godziny szczytu", c.pse_today_entity)}
+          ${this._pseCard("Jutro · D+1", "Planowane energetyczne godziny szczytu", c.pse_tomorrow_entity)}
+        </div>
+        <div class="pse-legend">
+          <span><i class="legend-darkgreen"></i>Zalecane użytkowanie</span>
+          <span><i class="legend-green"></i>Normalne użytkowanie</span>
+          <span><i class="legend-yellow"></i>Zalecane oszczędzanie</span>
+          <span><i class="legend-red"></i>Wymagane ograniczenie</span>
+        </div>
+      </section>
 
+      <div class="bottom-grid">
         <section class="panel-card">
-          <div class="card-head"><div><strong>Statystyki</strong><span>Ostatnie 30 dni</span></div></div>
+          <div class="card-head"><div><strong>Statystyki</strong><span>Na podstawie historii zużycia</span></div></div>
           <div class="stats-list">
-            <div class="stat-row"><div class="stat-left"><i>▥</i>Średnie dzienne zużycie</div><strong>${Number.isFinite(dailyAverage)?this._fmt(dailyAverage,2):"—"} kWh</strong></div>
-            <div class="stat-row"><div class="stat-left"><i>↗</i>Najwyższe zużycie</div><strong>${Number.isFinite(max30)?this._fmt(max30,1):"—"} kWh</strong></div>
-            <div class="stat-row"><div class="stat-left"><i>↘</i>Najniższe zużycie</div><strong>${Number.isFinite(min30)?this._fmt(min30,1):"—"} kWh</strong></div>
-            <div class="stat-row"><div class="stat-left"><i>Σ</i>Łączne zużycie</div><strong>${Number.isFinite(total30)?this._fmt(total30,1):"—"} kWh</strong></div>
+            <div class="stat-row"><div class="stat-left"><i>▥</i>Średnie dzienne zużycie</div><strong>${Number.isFinite(dailyAverage) ? this._fmt(dailyAverage,2) + " kWh" : "—"}</strong></div>
+            <div class="stat-row"><div class="stat-left"><i>↗</i>Najwyższe zużycie (30 dni)</div><strong>${Number.isFinite(maxDaily30) ? this._fmt(maxDaily30,1) + " kWh" : "—"}</strong></div>
+            <div class="stat-row"><div class="stat-left"><i>↘</i>Najniższe zużycie (30 dni)</div><strong>${Number.isFinite(minDaily30) ? this._fmt(minDaily30,1) + " kWh" : "—"}</strong></div>
+            <div class="stat-row"><div class="stat-left"><i>Σ</i>Łączne zużycie (30 dni)</div><strong>${Number.isFinite(total30) ? this._fmt(total30,1) + " kWh" : "—"}</strong></div>
           </div>
         </section>
 
@@ -300,50 +1031,59 @@
           <div class="card-head"><div><strong>Informacje o liczniku</strong><span>eLicznik</span></div></div>
           <div class="info-grid">
             <div class="info"><div class="info-label">Model</div><div class="info-value">MA309M</div></div>
-            <div class="info"><div class="info-label">Numer licznika</div><div class="info-value">${this._escape(String(meterNumber))}</div></div>
+            <div class="info"><div class="info-label">Numer licznika</div><div class="info-value">${this._escape(this._state(c.meter_number_entity)?.state || "—")}</div></div>
             <div class="info"><div class="info-label">Taryfa</div><div class="info-value">${this._escape(String(tariff))}</div></div>
             <div class="info"><div class="info-label">Ostatni odczyt</div><div class="info-value">${this._date(lastReading)}</div></div>
-            <div class="info full"><div class="info-label">Status</div><div class="info-value"><span class="status-live-dot"></span>Połączony (HAN)</div></div>
+            <div class="info full"><div class="info-label">Status</div><div class="info-value"><span class="status-live-dot"></span> Połączony (eLicznik)</div></div>
           </div>
-          <button class="refresh-wide" data-refresh title="Odśwież dane Tauron" aria-label="Odśwież dane Tauron" ${this._loading?"disabled":""}>↻&nbsp; Odśwież dane z eLicznik</button>
+          <button class="refresh-wide" title="Odśwież dane Tauron" aria-label="Odśwież dane Tauron" ${this._loading ? "disabled" : ""}>↻ &nbsp; Odśwież dane z eLicznik</button>
         </section>
       </div>
 
+      <section class="panel-card" style="margin-top:12px">
+        <div class="card-head"><div><strong>Okres rozliczeniowy</strong><span>Budżet i stan początkowy</span></div><div class="pill">${Number.isFinite(days) ? this._fmt(days,0) + " dni" : "—"}</div></div>
+        <div class="info-grid">
+          <div class="info"><div class="info-label">Dzienny budżet</div><div class="info-value">${Number.isFinite(dailyBudget) ? this._fmt(dailyBudget,2) : "—"} kWh</div></div>
+          <div class="info"><div class="info-label">Miesięczny budżet</div><div class="info-value">${Number.isFinite(monthlyBudget) ? this._fmt(monthlyBudget,2) : "—"} kWh</div></div>
+          <div class="info"><div class="info-label">Początek okresu · pobór</div><div class="info-value">${Number.isFinite(billingStartConsumed) ? this._fmt(billingStartConsumed,1) : "—"} kWh</div></div>
+          <div class="info"><div class="info-label">Początek okresu · oddanie</div><div class="info-value">${Number.isFinite(billingStartExported) ? this._fmt(billingStartExported,1) : "—"} kWh</div></div>
+        </div>
+      </section>
+
       <footer class="footer">
-        <span>Źródło: /odczyty/api · /energia/api · PSE Energetyczny Kompas</span>
-        <span>Wybrany dzień: ${selectedDate} · Auto ${this._autoRefreshMinutes} min · Aktualizacja ${updated?this._date(updated):"—"}</span>
+        <span>Źródło dzisiaj: /odczyty/api · historia: /energia/api · PSE: Energetyczny Kompas</span>
+        <span>Wybrany dzień: ${selectedDate} · Auto ${this._autoRefreshMinutes} min</span>
       </footer>
     </section>
   `;
 
-  this.shadowRoot.querySelectorAll("[data-energy-date]").forEach(button=>{
-    button.addEventListener("click",()=>this._changeDate(Number(button.dataset.energyDate)));
+  this.shadowRoot.querySelectorAll("[data-energy-date]").forEach(button => {
+    button.addEventListener("click", () => this._changeDate(Number(button.dataset.energyDate)));
   });
-  const todayButton=this.shadowRoot.querySelector("[data-energy-today]");
-  if(todayButton)todayButton.addEventListener("click",()=>this._goToday());
+  const todayButton = this.shadowRoot.querySelector("[data-energy-today]");
+  if (todayButton) todayButton.addEventListener("click", () => this._goToday());
 
-  this.shadowRoot.querySelectorAll("[data-refresh],.refresh-wide").forEach(button=>{
-    button.addEventListener("click",()=>this._refresh());
+  this.shadowRoot.querySelectorAll(".refresh, .refresh-wide").forEach(button => {
+    if (button.dataset.energyDate !== undefined || button.dataset.energyToday !== undefined) return;
+    button.addEventListener("click", () => this._refresh());
   });
 
-  const chart=this.shadowRoot.querySelector(".chart-inner");
-  const tooltip=this.shadowRoot.querySelector(".chart-tooltip");
-  if(chart&&tooltip){
-    chart.querySelectorAll(".hourbar").forEach(bar=>{
-      const show=event=>{
-        tooltip.hidden=false;
-        tooltip.innerHTML="<strong>"+bar.dataset.kind+"</strong><span>"+bar.dataset.label+"</span><b>"+this._fmt(Number(bar.dataset.value),2)+" kWh</b>";
-      };
-      bar.addEventListener("mouseenter",show);
-      bar.addEventListener("focus",show);
-      bar.addEventListener("mousemove",event=>{
-        const rect=chart.getBoundingClientRect();
-        const x=event.clientX-rect.left,y=event.clientY-rect.top;
-        tooltip.style.left=Math.max(8,Math.min(x+12,rect.width-150))+"px";
-        tooltip.style.top=Math.max(8,y-65)+"px";
+  const chart = this.shadowRoot.querySelector(".chart-wrap");
+  const tooltip = this.shadowRoot.querySelector(".chart-tooltip");
+  if (chart && tooltip) {
+    chart.querySelectorAll(".chart-point").forEach(point => {
+      point.addEventListener("mouseenter", () => {
+        tooltip.hidden = false;
+        tooltip.innerHTML = `<strong>${point.dataset.kind}</strong><span>${point.dataset.label}</span><b>${this._fmt(Number(point.dataset.value), 2)} kWh</b>`;
       });
-      bar.addEventListener("mouseleave",()=>{tooltip.hidden=true;});
-      bar.addEventListener("blur",()=>{tooltip.hidden=true;});
+      point.addEventListener("mousemove", event => {
+        const rect = chart.getBoundingClientRect();
+        const x = event.clientX - rect.left;
+        const y = event.clientY - rect.top;
+        tooltip.style.left = `${Math.max(8, Math.min(x + 12, rect.width - 150))}px`;
+        tooltip.style.top = `${Math.max(8, y - 70)}px`;
+      });
+      point.addEventListener("mouseleave", () => { tooltip.hidden = true; });
     });
   }
 }
