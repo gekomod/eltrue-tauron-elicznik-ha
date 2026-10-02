@@ -26,8 +26,13 @@ class TauronEnergyCard extends HTMLElement {
       pse_today_entity: "sensor.serwerownia_tauron_elicznik_energetyczny_kompas_dzisiaj",
       pse_tomorrow_entity: "sensor.serwerownia_tauron_elicznik_energetyczny_kompas_jutro",
       title: "Energia",
-      days_history: 14,
-      auto_refresh_minutes: 60
+      days_history: 30,
+      auto_refresh_minutes: 60,
+      power_entity: "",
+      cost_entity: "",
+      carbon_entity: "",
+      meter_number_entity: "",
+      flow_image_url: "/local/tauron-energy-flow-clean-wide.jpg"
     };
   }
 
@@ -483,64 +488,55 @@ class TauronEnergyCard extends HTMLElement {
     </section>
   `;
 }
-  _chartSvg() {
-    const chartHistory = this._chartHistorySeries();
-    const consumed = chartHistory || this._dailySeries(this._config.consumed_entity);
-    const exported = this._dailySeries(this._config.exported_entity);
-    const all = [...consumed.map(x => x.value), ...exported.map(x => x.value)];
-    const max = Math.max(1, ...all) * 1.15;
+  _chartSvg(){
+  const history=this._chartHistorySeries()||[];
+  const entry=this._selectedHistoryEntry();
+  const values=Array.isArray(entry?.values)?entry.values.map(Number):[];
+  const valid=values.filter(Number.isFinite);
+  if(!valid.length)return `<div class="chart-empty"><strong>Brak profilu godzinowego</strong><span>Oczekiwanie na dane godzinowe z Taurona.</span></div>`;
 
-    const W = 900, H = 280;
-    const left = 46, right = 18, top = 22, bottom = 42;
-    const plotW = W - left - right, plotH = H - top - bottom;
+  const W=900,H=255,left=46,right=18,top=42,bottom=34;
+  const plotW=W-left-right,plotH=H-top-bottom;
+  const max=Math.max(1,...valid)*1.16;
+  const slot=plotW/values.length;
+  const barW=Math.max(8,slot-5);
+  const zone=h=>h>=6&&h<13?{c:"bar-t1",n:"T1"}:(h>=13&&h<15?{c:"bar-t2",n:"T2"}:{c:"bar-t3",n:"T3"});
 
-    const path = data => data.map((p, i) => {
-      const x = left + (i / Math.max(1, data.length - 1)) * plotW;
-      const y = top + plotH - (p.value / max) * plotH;
-      return `${i ? "L" : "M"} ${x.toFixed(1)} ${y.toFixed(1)}`;
-    }).join(" ");
+  const bars=values.map((v,i)=>{
+    if(!Number.isFinite(v))return"";
+    const x=left+i*slot+(slot-barW)/2;
+    const h=Math.max(2,(v/max)*plotH);
+    const y=top+plotH-h;
+    const z=zone(i);
+    return `<g class="hourbar" tabindex="0" data-kind="Pobór" data-label="${String(i).padStart(2,"0")}:00" data-value="${v}"><rect class="${z.c}" x="${x.toFixed(1)}" y="${y.toFixed(1)}" width="${barW.toFixed(1)}" height="${h.toFixed(1)}" rx="4"></rect><title>${String(i).padStart(2,"0")}:00 · ${z.n} · ${this._fmt(v,2)} kWh</title></g>`;
+  }).join("");
 
-    const points = (data, cls, kind) => data.map((p, i) => {
-      const x = left + (i / Math.max(1, data.length - 1)) * plotW;
-      const y = top + plotH - (p.value / max) * plotH;
-      return `<circle class="chart-point ${cls}" data-kind="${kind}" data-label="${this._escape(p.label)}" data-value="${p.value}" cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="5"></circle>`;
-    }).join("");
+  const grid=[0,.25,.5,.75,1].map(r=>{
+    const y=top+plotH-r*plotH;
+    return `<line class="chart-grid-ref" x1="${left}" y1="${y}" x2="${W-right}" y2="${y}"></line><text class="chart-axis-y-ref" x="${left-8}" y="${y+4}" text-anchor="end">${this._fmt(max*r,1)}</text>`;
+  }).join("");
 
-    const grid = [0, .25, .5, .75, 1].map(r => {
-      const y = top + plotH - r * plotH;
-      const value = max * r;
-      return `<line class="grid" x1="${left}" y1="${y}" x2="${W-right}" y2="${y}"></line>
-        <text class="y-axis" x="${left-10}" y="${y+4}" text-anchor="end">${this._fmt(value,1)}</text>`;
-    }).join("");
+  const labels=values.map((_,i)=>{
+    if(values.length>12&&i%2!==0)return"";
+    const x=left+i*slot+slot/2;
+    return `<text class="chart-axis-x-ref" x="${x.toFixed(1)}" y="${H-10}" text-anchor="middle">${String(i).padStart(2,"0")}</text>`;
+  }).join("");
 
-    const labels = consumed.map((p, i) => {
-      if (consumed.length > 8 && i % 2 !== 0) return "";
-      const x = left + (i / Math.max(1, consumed.length - 1)) * plotW;
-      return `<text class="axis" x="${x}" y="${H-12}" text-anchor="middle">${p.label}</text>`;
-    }).join("");
+  const total=Number.isFinite(entry?.value)?entry.value:NaN;
+  const idx=history.findIndex(x=>x.date===entry?.date);
+  const prev=idx>0?Number(history[idx-1]?.value):NaN;
+  const delta=Number.isFinite(total)&&Number.isFinite(prev)&&prev>0?((total-prev)/prev)*100:NaN;
 
-    return `
-      <div class="chart-wrap">
-        <svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" role="img" aria-label="Zużycie energii z ostatnich dni">
-          <defs>
-            <linearGradient id="energyFill" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0%" stop-color="#4f7cff" stop-opacity=".22"></stop>
-              <stop offset="100%" stop-color="#4f7cff" stop-opacity=".02"></stop>
-            </linearGradient>
-          </defs>
-          ${grid}
-          <path class="area-consumed" d="${path(consumed)} L ${W-right} ${top+plotH} L ${left} ${top+plotH} Z"></path>
-          <path class="line-consumed" d="${path(consumed)}"></path>
-          <path class="line-exported" d="${path(exported)}"></path>
-          ${points(consumed, "dot-consumed", "Pobór")}
-          ${points(exported, "dot-exported", "Oddanie")}
-          ${labels}
-        </svg>
-        <div class="chart-tooltip" hidden></div>
-      </div>
-    `;
-  }
-
+  return `<div class="chart-reference">
+    <div class="chart-ref-head">
+      <div><strong>${Number.isFinite(total)?this._fmt(total,1):"—"} kWh</strong><span>${this._dateLabel(entry?.date||this._selectedDate)}</span>${Number.isFinite(delta)?`<em class="${delta<=0?"down":"up"}">${delta<=0?"↓":"↑"} ${this._fmt(Math.abs(delta),0)}%</em>`:""}</div>
+      <div class="chart-tabs"><button class="chart-tab active" type="button">Dzień</button><button class="chart-tab" type="button">Tydzień</button><button class="chart-tab" type="button">Miesiąc</button></div>
+    </div>
+    <svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" role="img" aria-label="Godzinowe zużycie energii">${grid}${bars}${labels}</svg>
+    <div class="chart-ref-legend"><span><i class="legend-blue"></i>T1</span><span><i class="legend-orange"></i>T2</span><span><i class="legend-purple"></i>T3</span></div>
+    <div class="chart-tooltip" hidden></div>
+  </div>`;
+}
   async _refresh() {
     const entity = this._config.refresh_entity;
     if (!this._hass || !entity || this._loading) return;
@@ -595,8 +591,6 @@ class TauronEnergyCard extends HTMLElement {
     : 0;
   const daysPercent = Number.isFinite(days) ? Math.max(0, Math.min(100, (days / 365) * 100)) : 0;
 
-  const elapsedHours = Math.max(1, new Date().getHours() + new Date().getMinutes() / 60);
-  const avgPower = Number.isFinite(dailyConsumed) ? (dailyConsumed / elapsedHours) * 1000 : NaN;
   const fmtPower = value => Number.isFinite(value)
     ? `${this._fmt(value,0)} W`
     : "—";
@@ -824,7 +818,36 @@ class TauronEnergyCard extends HTMLElement {
         .scene-bottom{align-items:flex-start;flex-direction:column}.kpi-grid{grid-template-columns:1fr 1fr}.kpi{min-height:135px;padding:13px}.kpi-value{font-size:24px}
         .zone-grid,.pse-grid{grid-template-columns:1fr}.info-grid{grid-template-columns:1fr}.footer{flex-direction:column}.chart-wrap{height:220px}
       }
-    </style>
+    
+      .scene-art{position:relative;aspect-ratio:1250/233;overflow:hidden;background:#061624}
+      .scene-art>img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;object-position:center;display:block}
+      .scene-motion{position:absolute;inset:0;width:100%;height:100%;z-index:5;pointer-events:none;overflow:hidden}
+      .scene-motion-line{fill:none;stroke:#6de1ff;stroke-width:2.1;stroke-linecap:round;stroke-dasharray:12 18;opacity:.22}
+      .flow-live .scene-motion-line{animation:sceneDashRef 1.25s linear infinite}@keyframes sceneDashRef{to{stroke-dashoffset:-60}}
+      .scene-arrows{display:none}.flow-live .scene-arrows{display:block}
+      .energy-arrow path{fill:none;stroke:#d9fbff;stroke-width:3.4;stroke-linecap:round;stroke-linejoin:round;filter:url(#sceneArrowGlow)}
+      .scene-label{position:absolute;z-index:7;display:flex;flex-direction:column;gap:2px;color:#eef8ff;text-shadow:0 2px 12px rgba(0,0,0,.92);line-height:1.05;pointer-events:none}
+      .scene-label strong{font-size:12px;font-weight:900}.scene-label span{font-size:8px;color:#b9d0df}
+      .scene-label-grid{left:13%;top:10%}.scene-label-meter{left:34.5%;top:8%}.scene-label-box{left:58%;top:9%}.scene-label-house{right:8%;top:9%;align-items:flex-end;text-align:right}
+      .scene-meter-live{position:absolute;z-index:7;left:38.0%;top:39%;width:7.0%;height:18%;display:flex;align-items:center;justify-content:center;flex-direction:column;background:linear-gradient(180deg,#effcff,#cfeef2);border:1px solid #466875;border-radius:6px;color:#132b38;box-shadow:0 0 12px rgba(66,207,255,.18);line-height:1}
+      .scene-meter-live strong{font:900 clamp(8px,1.08vw,17px)/1 monospace}.scene-meter-live span{margin-top:2px;font:800 clamp(4px,.42vw,7px)/1 system-ui;color:#526b78}
+      .scene-live-panel{position:absolute;z-index:8;left:50%;bottom:6%;transform:translateX(-50%);display:flex;gap:4px;max-width:92%;padding:5px 8px;border:1px solid rgba(123,200,234,.3);border-radius:999px;background:rgba(3,18,29,.76);backdrop-filter:blur(7px);color:#c8dbe6;font-size:6px;white-space:nowrap}
+      .scene-live-panel span{padding:0 5px;border-right:1px solid rgba(142,191,216,.18)}.scene-live-panel span:last-child{border-right:0}.scene-live-panel b{color:#f1f8fd}
+      .scene-vignette{position:absolute;z-index:2;inset:0;pointer-events:none;background:linear-gradient(90deg,rgba(2,11,20,.06),transparent 24%,transparent 76%,rgba(2,11,20,.06))}
+      .chart-reference{position:relative;height:252px}.chart-ref-head{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:4px}.chart-ref-head>div:first-child{display:flex;align-items:baseline;gap:9px;flex-wrap:wrap}.chart-ref-head strong{font-size:27px;letter-spacing:-.04em}.chart-ref-head span{font-size:8px;color:#7894a8}.chart-ref-head em{font-style:normal;color:#59eaa5;font-size:9px;font-weight:900}.chart-ref-head em.up{color:#ff9d63}
+      .chart-tabs{display:flex;align-items:center;gap:3px;padding:4px;background:#0a1b2a;border:1px solid #183a51;border-radius:999px}.chart-tab{border:0;background:transparent;color:#8fa7b9;border-radius:999px;padding:7px 11px;font-size:8px;cursor:pointer}.chart-tab.active{color:#fff;background:linear-gradient(180deg,#2b98f0,#176fc1);box-shadow:0 0 18px rgba(43,152,240,.3)}
+      .chart-reference svg{display:block;width:100%;height:210px;overflow:visible}.chart-grid-ref{stroke:#17364b;stroke-width:1}.chart-axis-y-ref,.chart-axis-x-ref{fill:#7894a8;font-size:8px}.bar-t1{fill:#329fff;filter:drop-shadow(0 0 4px rgba(50,159,255,.24))}.bar-t2{fill:#ff9b3d;filter:drop-shadow(0 0 4px rgba(255,155,61,.20))}.bar-t3{fill:#9b63ff;filter:drop-shadow(0 0 4px rgba(155,99,255,.24))}
+      .hourbar rect{transition:filter .15s ease,transform .15s ease;transform-box:fill-box;transform-origin:center bottom}.hourbar:hover rect,.hourbar:focus rect{filter:brightness(1.2);transform:scaleY(1.025)}
+      .chart-ref-legend{display:flex;gap:16px;margin-top:-2px;color:#819bad;font-size:8px}.chart-ref-legend span{display:inline-flex;align-items:center;gap:5px}.chart-ref-legend i{width:7px;height:7px;border-radius:50%;display:inline-block}.legend-blue{background:#329fff}.legend-orange{background:#ff9b3d}.legend-purple{background:#9b63ff}
+      .hourly{display:none}
+      .kpi-grid{gap:12px}.kpi{min-height:158px}.kpi-top{justify-content:flex-start}
+      .zone-grid{gap:9px}.zone{border-radius:14px;padding:13px}.z1 .badge{background:linear-gradient(180deg,#1688f7,#126acb);color:#fff;border-color:#39aaff;box-shadow:0 0 16px rgba(45,159,255,.24)}.z2 .badge{background:linear-gradient(180deg,#ffad42,#f47d1f);color:#fff;border-color:#ffca70;box-shadow:0 0 16px rgba(255,155,61,.20)}.z3 .badge{background:linear-gradient(180deg,#a966ff,#7d42d7);color:#fff;border-color:#bd91ff;box-shadow:0 0 16px rgba(157,99,255,.22)}
+      .z1{border-color:#173f65}.z2{border-color:#60451f}.z3{border-color:#4b3272}.z1 .zone-footer strong{color:#61c5ff}.z2 .zone-footer strong{color:#ffb65f}.z3 .zone-footer strong{color:#c39cff}
+      .bottom-grid{display:grid;grid-template-columns:minmax(0,1.45fr) minmax(230px,.88fr) minmax(230px,.92fr);gap:12px}.context{margin:0;height:100%}
+      @media(max-width:1050px){.bottom-grid{grid-template-columns:1fr 1fr}.bottom-grid .context{grid-column:1/-1}}
+      @media(max-width:700px){.scene-label strong{font-size:9px}.scene-label span{font-size:6px}.scene-live-panel{font-size:5px;max-width:94%}.scene-meter-live{left:37.6%;width:7.5%;height:18%}.bottom-grid{grid-template-columns:1fr}.bottom-grid .context{grid-column:auto}.chart-tabs{display:none}}
+      @media(prefers-reduced-motion:reduce){.flow-live .scene-status i,.flow-live .scene-motion-line,.energy-arrow,.spin{animation:none!important}}
+</style>
 
     <section class="dashboard" aria-label="Tauron eLicznik">
       <header class="topbar">
