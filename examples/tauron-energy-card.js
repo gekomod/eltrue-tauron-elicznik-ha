@@ -424,10 +424,18 @@ class TauronEnergyCard extends HTMLElement {
   const active = Number.isFinite(dailyConsumed) && dailyConsumed > 0;
   const status = active ? "Przepływ aktywny" : "Brak dzisiejszego poboru";
   const statusClass = active ? "flow-live" : "flow-idle";
+  const reducedMotion = window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches;
+  const motion = active && !reducedMotion;
+
+  const pulse = (begin) => motion ? `
+    <g class="pulse">
+      <path d="M0 0 L13 8 L0 16" />
+      <animateMotion dur="3.2s" begin="${begin}s" repeatCount="indefinite" rotate="auto"
+        path="M208 140 C275 125 352 122 430 146 S650 148 720 146 S920 145 1020 154" />
+    </g>` : "";
 
   return `
     <section class="scene ${statusClass}" aria-label="Przepływ energii od sieci Tauron do domu">
-      <div class="scene-overlay"></div>
       <div class="scene-topbar">
         <div>
           <div class="scene-kicker">PRZEPŁYW ENERGII</div>
@@ -456,34 +464,23 @@ class TauronEnergyCard extends HTMLElement {
             <stop offset="82%" stop-color="#4db6ff" stop-opacity=".9"/>
             <stop offset="100%" stop-color="#4db6ff" stop-opacity=".15"/>
           </linearGradient>
-          <filter id="sceneGlow">
-            <feGaussianBlur stdDeviation="5" result="blur"/>
-            <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
-          </filter>
-          <filter id="deviceGlow">
-            <feGaussianBlur stdDeviation="8" result="blur"/>
-            <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
-          </filter>
+          <filter id="sceneGlow"><feGaussianBlur stdDeviation="5" result="blur"/><feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+          <filter id="deviceGlow"><feGaussianBlur stdDeviation="8" result="blur"/><feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
         </defs>
 
         <rect width="1200" height="310" rx="18" fill="url(#sceneSky)"/>
-
         <g opacity=".45" fill="#c7dcff">
-          <circle cx="108" cy="52" r="1.4"/><circle cx="167" cy="31" r="1.1"/>
-          <circle cx="258" cy="72" r="1.4"/><circle cx="334" cy="43" r="1.1"/>
-          <circle cx="454" cy="34" r="1.5"/><circle cx="548" cy="59" r="1.1"/>
-          <circle cx="635" cy="30" r="1.3"/><circle cx="764" cy="67" r="1.2"/>
-          <circle cx="896" cy="43" r="1.3"/><circle cx="1032" cy="69" r="1.5"/>
-          <circle cx="1134" cy="36" r="1.2"/>
+          <circle cx="108" cy="52" r="1.4"/><circle cx="167" cy="31" r="1.1"/><circle cx="258" cy="72" r="1.4"/>
+          <circle cx="334" cy="43" r="1.1"/><circle cx="454" cy="34" r="1.5"/><circle cx="548" cy="59" r="1.1"/>
+          <circle cx="635" cy="30" r="1.3"/><circle cx="764" cy="67" r="1.2"/><circle cx="896" cy="43" r="1.3"/>
+          <circle cx="1032" cy="69" r="1.5"/><circle cx="1134" cy="36" r="1.2"/>
         </g>
-
         <path d="M0 245 Q160 198 310 242 T590 236 T850 230 T1200 242 V310 H0Z" fill="url(#sceneGround)"/>
         <path d="M0 249 Q180 216 345 250 T690 242 T930 236 T1200 249" fill="none" stroke="#173b2f" stroke-width="3"/>
 
-        <!-- Tauron grid / pole -->
         <g class="scene-pole" transform="translate(88 37)">
           <path d="M35 228 L77 26 L119 228 M47 172 H107 M41 199 H113 M32 90 H122 M40 60 H114 M77 26 V228"
-                fill="none" stroke="#91a9c1" stroke-width="4" stroke-linecap="round"/>
+            fill="none" stroke="#91a9c1" stroke-width="4" stroke-linecap="round"/>
           <path d="M35 228 L77 26 L119 228" fill="none" stroke="#d4e2ef" stroke-width="2"/>
           <path d="M24 92 H130 M30 119 H124" fill="none" stroke="#5e7690" stroke-width="2"/>
           <circle cx="77" cy="26" r="5" fill="#a6ddff" filter="url(#sceneGlow)"/>
@@ -491,51 +488,39 @@ class TauronEnergyCard extends HTMLElement {
           <text x="77" y="274" text-anchor="middle" class="scene-sub">Sieć TAURON</text>
         </g>
 
-        <!-- House -->
         <g class="scene-house" transform="translate(1020 92)">
           <path d="M0 86 L78 21 L156 86 V191 H0Z" fill="#182d42" stroke="#8ca5bc" stroke-width="3"/>
           <path d="M-9 88 L78 13 L165 88" fill="none" stroke="#cedcea" stroke-width="4" stroke-linejoin="round"/>
           <rect x="65" y="116" width="27" height="75" rx="2" fill="#0a1724" stroke="#7e93a9" stroke-width="2"/>
-          <rect x="16" y="107" width="30" height="28" rx="2" fill="#d6f5ff"/>
-          <rect x="110" y="107" width="30" height="28" rx="2" fill="#d6f5ff"/>
-          <rect x="20" y="111" width="8" height="20" fill="#fff6bf" opacity=".92"/>
-          <rect x="34" y="111" width="8" height="20" fill="#fff6bf" opacity=".92"/>
-          <rect x="114" y="111" width="8" height="20" fill="#fff6bf" opacity=".92"/>
-          <rect x="128" y="111" width="8" height="20" fill="#fff6bf" opacity=".92"/>
-          <path d="M124 64 V14" stroke="#8399b0" stroke-width="3"/>
-          <path d="M132 14 C141 25 141 39 132 48" fill="none" stroke="#8399b0" stroke-width="3"/>
+          <rect x="16" y="107" width="30" height="28" rx="2" fill="#d6f5ff"/><rect x="110" y="107" width="30" height="28" rx="2" fill="#d6f5ff"/>
+          <rect x="20" y="111" width="8" height="20" fill="#fff6bf" opacity=".92"/><rect x="34" y="111" width="8" height="20" fill="#fff6bf" opacity=".92"/>
+          <rect x="114" y="111" width="8" height="20" fill="#fff6bf" opacity=".92"/><rect x="128" y="111" width="8" height="20" fill="#fff6bf" opacity=".92"/>
+          <path d="M124 64 V14" stroke="#8399b0" stroke-width="3"/><path d="M132 14 C141 25 141 39 132 48" fill="none" stroke="#8399b0" stroke-width="3"/>
           <text x="78" y="218" text-anchor="middle" class="scene-label">TWÓJ DOM</text>
           <text x="78" y="234" text-anchor="middle" class="scene-sub">Instalacja odbiorcza</text>
         </g>
 
-        <!-- Meter MA309M -->
         <g class="scene-device scene-meter" transform="translate(430 75)">
           <rect x="0" y="0" width="172" height="158" rx="18" fill="#ced5dc" stroke="#eff5fb" stroke-width="3"/>
           <rect x="12" y="12" width="148" height="106" rx="11" fill="#b3bdc7" stroke="#6f8293" stroke-width="2"/>
           <rect x="28" y="30" width="116" height="56" rx="8" fill="#ecf8fb" stroke="#778b9b" stroke-width="2"/>
           <text x="86" y="64" text-anchor="middle" font-size="25" font-family="monospace" font-weight="800" fill="#122033">001036</text>
           <text x="126" y="78" text-anchor="middle" font-size="8" font-family="system-ui" font-weight="800" fill="#445b72">kWh</text>
-          <circle cx="38" cy="132" r="11" fill="#69e7af"/>
-          <circle cx="38" cy="132" r="5" fill="#113022"/>
-          <circle cx="69" cy="132" r="10" fill="#91b3ca"/>
-          <rect x="118" y="126" width="28" height="13" rx="3" fill="#7f8e9b"/>
+          <circle cx="38" cy="132" r="11" fill="#69e7af"/><circle cx="38" cy="132" r="5" fill="#113022"/>
+          <circle cx="69" cy="132" r="10" fill="#91b3ca"/><rect x="118" y="126" width="28" height="13" rx="3" fill="#7f8e9b"/>
           <text x="86" y="178" text-anchor="middle" class="scene-label">LICZNIK MA309M</text>
           <text x="86" y="194" text-anchor="middle" class="scene-sub">Tauron eLicznik</text>
           <rect x="-18" y="-18" width="208" height="194" rx="28" fill="none" stroke="#31a9ff" stroke-opacity=".22" stroke-width="4" filter="url(#deviceGlow)"/>
         </g>
 
-        <!-- Main switchboard -->
         <g class="scene-device" transform="translate(720 75)">
           <rect x="0" y="0" width="190" height="158" rx="18" fill="#ccd5de" stroke="#eff5fb" stroke-width="3"/>
           <rect x="16" y="14" width="158" height="122" rx="10" fill="#edf2f6" stroke="#7b8e9e" stroke-width="2"/>
           <g transform="translate(30 27)">
             <rect x="0" y="0" width="128" height="70" rx="6" fill="#f8fafc" stroke="#b3bec8"/>
             <g fill="#f6f7f9" stroke="#768593" stroke-width="1.5">
-              <rect x="8" y="8" width="15" height="54" rx="2"/>
-              <rect x="29" y="8" width="15" height="54" rx="2"/>
-              <rect x="50" y="8" width="15" height="54" rx="2"/>
-              <rect x="71" y="8" width="15" height="54" rx="2"/>
-              <rect x="92" y="8" width="15" height="54" rx="2"/>
+              <rect x="8" y="8" width="15" height="54" rx="2"/><rect x="29" y="8" width="15" height="54" rx="2"/>
+              <rect x="50" y="8" width="15" height="54" rx="2"/><rect x="71" y="8" width="15" height="54" rx="2"/><rect x="92" y="8" width="15" height="54" rx="2"/>
             </g>
             <g stroke="#4e6172" stroke-width="2"><path d="M16 24v15"/><path d="M37 24v15"/><path d="M58 24v15"/><path d="M79 24v15"/><path d="M100 24v15"/></g>
           </g>
@@ -545,18 +530,11 @@ class TauronEnergyCard extends HTMLElement {
           <text x="95" y="194" text-anchor="middle" class="scene-sub">Skrzynia zabezpieczeń</text>
         </g>
 
-        <!-- Animated supply wire -->
         <path class="scene-wire-glow" d="M208 140 C275 125 352 122 430 146 S650 148 720 146 S920 145 1020 154"/>
         <path class="scene-wire" d="M208 140 C275 125 352 122 430 146 S650 148 720 146 S920 145 1020 154"/>
 
-        <!-- Chevron pulses moving left-to-right -->
         <g class="scene-pulses">
-          <g class="pulse"><path d="M0 0 L13 8 L0 16" /></g>
-          <g class="pulse"><path d="M0 0 L13 8 L0 16" /></g>
-          <g class="pulse"><path d="M0 0 L13 8 L0 16" /></g>
-          <g class="pulse"><path d="M0 0 L13 8 L0 16" /></g>
-          <g class="pulse"><path d="M0 0 L13 8 L0 16" /></g>
-          <g class="pulse"><path d="M0 0 L13 8 L0 16" /></g>
+          ${pulse(0)}${pulse(.55)}${pulse(1.1)}${pulse(1.65)}${pulse(2.2)}${pulse(2.75)}
         </g>
 
         <g class="scene-caption">
