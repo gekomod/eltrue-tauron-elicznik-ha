@@ -890,8 +890,8 @@ class TauronEnergyCard extends HTMLElement {
 
         <article class="kpi">
           <div class="kpi-top"><div class="kpi-icon">⚡</div><span class="kpi-label">Moc średnia dzisiaj</span></div>
-          <div class="kpi-value">${fmtPower(avgPower)}</div>
-          <div class="kpi-sub">wyliczona z dziennego zużycia</div>
+          <div class="kpi-value">${Number.isFinite(power) ? this._fmt(power,0) : "—"} <small>W</small></div>
+          <div class="kpi-sub">${Number.isFinite(power) ? "Odczyt chwilowy z HAN" : "Brak encji mocy chwilowej"}</div>
           <div class="mini-trend">
             <svg viewBox="0 0 220 40" preserveAspectRatio="none" aria-hidden="true">
               <polyline class="mini-line" points="0,30 16,24 31,28 47,18 63,23 79,14 95,20 111,9 127,18 143,12 159,20 175,10 191,16 207,6 220,10"/>
